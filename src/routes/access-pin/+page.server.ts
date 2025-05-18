@@ -3,64 +3,89 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { dev } from '$app/environment'; // To check if in development mode for cookie security
 
-// This load function is optional for this page, but good practice to include if needed later.
-// It also ensures $types.ActionData is correctly inferred if we need it for the page component.
-export const load: PageServerLoad = async ({ locals }) => {
-    // If user is already logged in (we'll set locals.admin later), redirect to dashboard
+export const load: PageServerLoad = async ({ locals, url }) => {
+    console.log('[/access-pin/+page.server.ts] Load function running. Current URL:', url.href);
     if (locals.admin) {
-        throw redirect(303, '/dashboard');
+        const redirectTo = url.searchParams.get('redirectTo') || '/dashboard';
+        console.log('[/access-pin/+page.server.ts] Admin already logged in. Redirecting to:', redirectTo);
+        throw redirect(303, redirectTo); // Redirect to dashboard or intended page
     }
-    return {}; // No specific data to load for the PIN page itself
+    console.log('[/access-pin/+page.server.ts] No admin logged in. Displaying PIN page.');
+    return {}; // No specific data to load if not logged in, page will render
 };
 
 export const actions: Actions = {
-    // This 'default' action will be called if PinAccessForm.svelte has action="?/default" or just action=""
-    // If PinAccessForm.svelte has action="?/verifyPin", then this should be 'verifyPin'
-    // Let's assume PinAccessForm.svelte has action="?/verifyPin" as per its default prop
-    verifyPin: async ({ cookies, request }) => {
+    verifyPin: async ({ cookies, request, url }) => { // `url` is also available here from the event context
         const formData = await request.formData();
         const submittedPin = formData.get('pin') as string;
 
-        if (!submittedPin || typeof submittedPin !== 'string' || submittedPin.length !== 6 || !/^\d{6}$/.test(submittedPin) ) {
-            return fail(400, { error: 'Invalid PIN format. Please enter 6 digits.', pin: submittedPin });
+        // Read redirectTo from the URL the form was submitted from.
+        // `url.searchParams` here refers to the URL of the page where the POST request was made.
+        const redirectTo = url.searchParams.get('redirectTo') || '/dashboard';
+        console.log('[/access-pin verifyPin action] Attempting login. redirectTo:', redirectTo);
+
+
+        // Server-side validation of the PIN format
+        if (!submittedPin || typeof submittedPin !== 'string' || submittedPin.length !== 6 || !/^\d{6}$/.test(submittedPin)) {
+            console.log('[/access-pin verifyPin action] Invalid PIN format submitted:', submittedPin);
+            return fail(400, {
+                error: 'Invalid PIN format. Please enter 6 digits.',
+                pin: submittedPin, // Send back the problematic PIN for potential display or logging
+                // No need to send redirectTo back with fail explicitly if page itself handles it,
+                // but you could: redirectTo: redirectTo
+            });
         }
 
         const adminPinsConfig = import.meta.env.VITE_ADMIN_PINS as string;
         if (!adminPinsConfig) {
-            console.error('VITE_ADMIN_PINS environment variable is not set.');
-            return fail(500, { error: 'Server configuration error. Please contact support.' });
+            console.error('CRITICAL: VITE_ADMIN_PINS environment variable is not set on the server.');
+            return fail(500, {
+                error: 'Server configuration error. Please contact support.',
+                // redirectTo: redirectTo
+            });
         }
 
         // Parse the VITE_ADMIN_PINS string: "id1:pin1,id2:pin2"
         const pinMappings = new Map<string, string>(); // Stores PIN -> admin_id
-        const configuredAdmins = adminPinsConfig.split(',');
-        for (const adminEntry of configuredAdmins) {
-            const [adminId, pin] = adminEntry.split(':');
-            if (adminId && pin) {
-                pinMappings.set(pin.trim(), adminId.trim());
+        try {
+            const configuredAdmins = adminPinsConfig.split(',');
+            for (const adminEntry of configuredAdmins) {
+                const parts = adminEntry.split(':');
+                if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+                    pinMappings.set(parts[1].trim(), parts[0].trim()); // pin:adminId
+                } else {
+                    console.warn(`Malformed entry in VITE_ADMIN_PINS: "${adminEntry}"`);
+                }
             }
+        } catch (e) {
+            console.error('Error parsing VITE_ADMIN_PINS:', e);
+            return fail(500, { error: 'Server configuration error parsing PINs.'});
         }
+
 
         const matchedAdminId = pinMappings.get(submittedPin);
 
         if (matchedAdminId) {
-            // PIN is valid! Set a cookie.
-            // The cookie will store the matchedAdminId (or a session token that maps to it)
+            console.log('[/access-pin verifyPin action] PIN Valid. Matched Admin ID:', matchedAdminId, '. Setting cookie.');
             cookies.set('admin_session', matchedAdminId, {
                 path: '/',
-                httpOnly: true, // Important for security: cookie not accessible via client-side JS
-                secure: !dev,   // True in production (HTTPS), false in local dev (HTTP)
-                sameSite: 'lax',
-                maxAge: 60 * 60 * 24 * 7, // Cookie expires in 7 days
+                httpOnly: true,
+                secure: !dev, // True in production (HTTPS), false in local dev (HTTP)
+                sameSite: 'lax', // Or 'strict' for more security if applicable
+                maxAge: 60 * 60 * 24 * 7, // Cookie expires in 7 days (in seconds)
             });
 
-            // Redirect to the dashboard
-            throw redirect(303, '/dashboard'); // 303 See Other is common for POST-redirect-GET
+            console.log('[/access-pin verifyPin action] Redirecting to:', redirectTo);
+            throw redirect(303, redirectTo); // 303 See Other is common for POST-redirect-GET
         } else {
-            // PIN is invalid
-            // Optional: Add a small delay to make brute-force attacks slightly harder
-            await new Promise(resolve => setTimeout(resolve, 300));
-            return fail(401, { error: 'Invalid PIN. Please try again.', pin: submittedPin });
+            console.log('[/access-pin verifyPin action] Invalid PIN submitted:', submittedPin);
+            // Optional: Add a small delay to make brute-force attacks slightly harder, but be mindful of UX.
+            // await new Promise(resolve => setTimeout(resolve, 300));
+            return fail(401, { // 401 Unauthorized is appropriate here
+                error: 'Invalid PIN. Please try again.',
+                pin: submittedPin,
+                // redirectTo: redirectTo
+            });
         }
     }
 };

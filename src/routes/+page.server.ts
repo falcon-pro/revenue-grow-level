@@ -1,20 +1,14 @@
 // src/routes/+page.server.ts
-import { supabase } from '$lib/supabaseClient';
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
-    console.log('Attempting to fetch from Supabase for connection test...');
-    try {
-        const { data, error } = await supabase.from('partners').select('id').limit(1);
-
-        if (error) {
-            console.error('Supabase query error during test:', error);
-            return { success: false, errorMessage: error.message, data: null };
-        }
-        console.log('Supabase query success. Test data (or empty array):', data);
-        return { success: true, errorMessage: null, data: data };
-    } catch (e: any) {
-        console.error('Exception during Supabase query test:', e);
-        return { success: false, errorMessage: e.message || 'Unknown exception during test', data: null };
+export const load: PageServerLoad = async ({ locals }) => {
+    console.log('[/+page.server.ts] Checking if admin is logged in for root page.');
+    if (locals.admin) {
+        console.log('[/+page.server.ts] Admin logged in, redirecting to /dashboard from root.');
+        throw redirect(303, '/dashboard'); // If logged in, go to dashboard
     }
+    // If not logged in, they just see the root page content (links to /access-pin or /dashboard)
+    console.log('[/+page.server.ts] Not logged in, showing root page.');
+    return {};
 };

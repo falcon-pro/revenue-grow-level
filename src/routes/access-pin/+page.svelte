@@ -1,9 +1,16 @@
-<!-- src/routes/access-pin/+page.svelte -->
+<!-- src/routes/access-pin/+page.svelte (Corrected) -->
 <script lang="ts">
   import PinAccessForm from '$lib/components/Auth/PinAccessForm.svelte';
-  import type { ActionData } from './$types'; // SvelteKit will generate this based on +page.server.ts
+  import type { PageData, ActionData } from './$types';
+  // import { page } from '$app/stores'; // No longer need $page store here for formAction
 
-  export let form: ActionData; // This will hold data returned from the form action (e.g., errors)
+  export let data: PageData;
+  export let form: ActionData;
+
+  // The formActionPath in PinAccessForm.svelte defaults to "?/verifyPin", which is what we want.
+  // We don't need to pass it explicitly if using the default.
+  // If you WERE passing it:
+  // const formAction = '?/verifyPin'; // Simple, no query params here
 </script>
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-gray-200 p-4">
@@ -16,10 +23,12 @@
       <p class="mt-1 text-sm text-center text-gray-600">Enter your secure PIN to proceed.</p>
     </div>
 
-    <!-- The `formActionPath` in PinAccessForm is default "?/verifyPin" which matches our action name -->
     <PinAccessForm errorMessage={form?.error} />
+    <!-- PinAccessForm will use its default formActionPath="?/verifyPin" -->
+    <!-- Or, if you want to be explicit: <PinAccessForm errorMessage={form?.error} formActionPath={"?/verifyPin"} /> -->
 
-    {#if form?.message} <!-- We are not returning 'message' from this action, but good to have for future -->
+
+    {#if form?.message}
       <p class="mt-4 text-sm text-green-600">{form.message}</p>
     {/if}
   </div>
