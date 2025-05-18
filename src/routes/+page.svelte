@@ -1,2 +1,8 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+<!-- src/routes/+page.svelte -->
+<div class="p-10">
+  <h1 class="text-xl font-bold">Welcome to the App!</h1>
+  <p>
+    <a href="/access-pin" class="text-blue-600 hover:underline">Go to PIN Login</a> |
+    <a href="/dashboard" class="text-blue-600 hover:underline">Go to Dashboard (will be protected later)</a>
+  </p>
+</div>
