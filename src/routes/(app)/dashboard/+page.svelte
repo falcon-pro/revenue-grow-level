@@ -1,42 +1,42 @@
 <!-- src/routes/(app)/dashboard/+page.svelte -->
 <script lang="ts">
-  import type { PageData } from './$types';
+  import type { PageData, ActionData } from './$types'; // ActionData is for form's server response
   export let data: PageData;
+  export let form: ActionData; // Will hold response from ?/addPartner action
 
   import PartnerTable from '$lib/components/Dashboard/PartnerTable/PartnerTable.svelte';
   import TableSkeleton from '$lib/components/Dashboard/PartnerTable/TableSkeleton.svelte';
-  import { navigating } from '$app/stores'; // SvelteKit store for navigation state
-
-  // $: console.log('Navigating state:', $navigating); // For observing navigation
+  import PartnerForm from '$lib/components/Dashboard/Forms/PartnerForm.svelte'; // Import the new form
+  // import { navigating } from '$app/stores';
 </script>
 
-<h2 class="text-2xl font-semibold text-gray-800 mb-6">Dashboard Overview</h2>
+<div class="space-y-8"> 
+  <div>
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Add New Partner / Revenue</h2>
+    <PartnerForm
+      formAction="?/addPartner"
+      submitButtonText="Add Partner Entry"
+      serverErrors={form?.errors}
+    />
+    {#if form?.message}
+      <p class="mt-3 text-sm {form.success ? 'text-green-600 bg-green-50 p-3 rounded-md' : 'text-red-600 bg-red-50 p-3 rounded-md'}">
+        {form.message}
+      </p>
+    {/if}
+  </div>
 
-{#if data.admin}
-    <p class="mb-4 text-sm text-gray-600">Displaying data for: <strong>{data.admin.id}</strong></p>
-{/if}
+  <div>
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Partner Records</h2>
+    {#if data.admin}
+        <p class="mb-4 text-sm text-gray-600">Displaying data for: <strong>{data.admin.id}</strong></p>
+    {/if}
 
-<!--
-  SvelteKit's default data loading means `data.partners` will be available once the page renders
-  after the `load` function in `+page.server.ts` completes.
-  The `$navigating` store is true when SvelteKit is fetching data for a new page *during client-side navigation*.
-  For initial load, the skeleton might not be visible for long unless data fetching is slow.
-  We use `data.partners` being potentially undefined before load completes.
--->
-{#if $navigating && !$navigating.to?.data?.partners }
-  <!-- Show skeleton if navigating to this page and new partner data isn't yet available in the navigation target -->
-  <TableSkeleton rows={5} columns={16}/>
-{:else if data.partners }
-  <PartnerTable partners={data.partners} />
-{:else if !$navigating}
-  <!-- Only show "Error" if not navigating and partners are still undefined/null -->
-  <p class="text-red-500 p-4 bg-red-50 rounded-md">
-    Error: Partner data not available or failed to load.
-  </p>
-{/if}
-
-
-<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mt-6 mb-6" role="alert">
-  <p class="font-bold">Note:</p>
-  <p>Table columns are simplified for now. Full column display and functionality will be added next. Action buttons are placeholders.</p>
+    {#if data.partners === undefined || data.partners === null}
+        <TableSkeleton rows={5} columns={16}/>
+    {:else if data.partners.length > 0}
+        <PartnerTable partners={data.partners} />
+    {:else}
+        <PartnerTable partners={[]} />
+    {/if}
+  </div>
 </div>
