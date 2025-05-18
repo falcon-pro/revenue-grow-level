@@ -1,11 +1,12 @@
+// tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./src/**/*.{html,js,svelte,ts}'], // This line is key
+  content: ['./src/**/*.{html,js,svelte,ts}'],
   theme: {
     extend: {},
   },
   plugins: [
-      require('@tailwindcss/typography'), // If selected
-      require('@tailwindcss/forms')        // If selected
+    require('@tailwindcss/typography'), // if you added it
+    require('@tailwindcss/forms')    // Make sure this is present
   ],
 }
