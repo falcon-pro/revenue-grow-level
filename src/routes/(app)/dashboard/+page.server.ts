@@ -20,6 +20,11 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 
     console.log('[/dashboard/+page.server.ts] Fetching partners for admin ID:', admin.id);
 
+    // Simulate delay START
+    if (import.meta.env.DEV) { // Only in development
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+    }
+
     const { data: partners, error: dbError } = await supabase
         .from('partners')
         .select('*') // Select all columns for now
@@ -40,4 +45,5 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
         // admin: admin, // already available from parent layout's data
         partners: partners || [] // Ensure partners is always an array
     };
+    
 };
