@@ -1,6 +1,9 @@
 <!-- src/routes/access-pin/+page.svelte -->
 <script lang="ts">
   import PinAccessForm from '$lib/components/Auth/PinAccessForm.svelte';
+  import type { ActionData } from './$types'; // SvelteKit will generate this based on +page.server.ts
+
+  export let form: ActionData; // This will hold data returned from the form action (e.g., errors)
 </script>
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-gray-200 p-4">
@@ -13,8 +16,11 @@
       <p class="mt-1 text-sm text-center text-gray-600">Enter your secure PIN to proceed.</p>
     </div>
 
-    <!-- Just render the form, we'll pass errorMessage later when we have a server action -->
-    <PinAccessForm />
+    <!-- The `formActionPath` in PinAccessForm is default "?/verifyPin" which matches our action name -->
+    <PinAccessForm errorMessage={form?.error} />
 
+    {#if form?.message} <!-- We are not returning 'message' from this action, but good to have for future -->
+      <p class="mt-4 text-sm text-green-600">{form.message}</p>
+    {/if}
   </div>
 </div>
