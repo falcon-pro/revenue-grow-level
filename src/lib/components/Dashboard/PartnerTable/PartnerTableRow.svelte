@@ -1,29 +1,28 @@
 <!-- src/lib/components/Dashboard/PartnerTable/PartnerTableRow.svelte -->
 <script lang="ts">
   // Assuming you've defined Partner type using Supabase types or manually
-  import type { Database } from '../../../types/supabase'; // OPTION A
-  type Partner = Database['public']['Tables']['partners']['Row']; // OPTION A
-
-  // import type { Partner, MonthlyRevenueEntry } from '$lib/utils/types'; // OPTION B
+  import type { Database } from '../../../../types/supabase'; // Adjust path as needed
+  type Partner = Database['public']['Tables']['partners']['Row'];
 
   import { formatDate, formatCurrency } from '$lib/utils/formatters';
-  import { getMonthName } from '$lib/utils/helpers'; // We'll create this
-  import { getEffectiveRevenue, PKR_RATE /* if needed directly */ } from '$lib/utils/revenue'; // We'll create this
+  import { getMonthName } from '$lib/utils/helpers';
+  import { getEffectiveRevenue } from '$lib/utils/revenue';
+  import { createEventDispatcher } from 'svelte'; // Import createEventDispatcher
 
   export let partner: Partner;
+
+  const dispatch = createEventDispatcher(); // Create dispatcher instance
 
   const isSuspended = partner.account_status === 'suspended';
   const rowClass = isSuspended ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50';
 
   // --- Logic from original renderPartnerRow, adapted ---
-
   const monthlyData = partner.monthly_revenue || {};
   const periodsWithPositiveRevenue = Object.keys(monthlyData).filter(period => {
-      const entry = (monthlyData as Record<string, any>)[period]; // Type assertion for dynamic access
+      const entry = (monthlyData as Record<string, any>)[period];
       return entry && typeof entry.usd === 'number' && entry.usd > 0;
   }).sort();
 
-  // Revenue Period Display (Show Range)
   let revenuePeriodStr = '-';
   if (periodsWithPositiveRevenue.length === 1) {
       revenuePeriodStr = getMonthName(periodsWithPositiveRevenue[0]);
@@ -31,7 +30,6 @@
       revenuePeriodStr = `${getMonthName(periodsWithPositiveRevenue[0])} - ${getMonthName(periodsWithPositiveRevenue[periodsWithPositiveRevenue.length - 1])}`;
   }
 
-  // Determine Latest Period/Status for "Latest Pay Status" column
   const allPeriods = Object.keys(monthlyData).sort();
   let latestStatusText = 'N/A';
   let latestStatusClass = 'text-gray-700 bg-gray-100 border-gray-200';
@@ -46,33 +44,27 @@
       }
   }
 
-  // Effective Revenue Calculation for Display (using helper)
   const effectiveRevenueData = getEffectiveRevenue(partner);
   let displayRevenueUSD = effectiveRevenueData.totalUSD;
   let displayRevenuePKR = effectiveRevenueData.totalPKR;
-  let displayRevenueSource = effectiveRevenueData.sourceForDisplay; // a new property from helper
+  let displayRevenueSource = effectiveRevenueData.sourceForDisplay;
 
-  // Format Dates
   const createdDateStr = formatDate(partner.created_at);
   const accountStartStr = formatDate(partner.account_start);
   const lastApiCheckStr = formatDate(partner.last_api_check) || '-';
 
-  // Revenue Status Icons and Tooltips
-  let revenueStatusHTML = ''; // Svelte way: use conditional rendering or components
+  let revenueStatusHTML = '';
   let revenueTooltip = '';
   const errorMsg = partner.api_error_message || 'Fetch failed.';
 
-  // Svelte way for icons - using slots or direct SVG
-  // For now, we'll keep it simple with text/classes
-  // Switch for revenueStatusHTML and revenueTooltip (simplified from original)
   switch (displayRevenueSource) {
       case 'api_loading':
-          revenueStatusHTML = `<span class="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" title="API Check Pending"></span>`; // Tailwind spinner
+          revenueStatusHTML = `<span class="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" title="API Check Pending"></span>`;
           revenueTooltip = `Checking Adsterra API... Last attempt: ${lastApiCheckStr}. Displaying 0.`;
           displayRevenueUSD = 0; displayRevenuePKR = 0;
           break;
       case 'api_error':
-          displayRevenueUSD = effectiveRevenueData.manualSumUSD; // Fallback to manual sum
+          displayRevenueUSD = effectiveRevenueData.manualSumUSD;
           displayRevenuePKR = effectiveRevenueData.manualSumPKR;
           revenueStatusHTML = `<span title="API Error" class="text-red-500">⚠️</span>`;
           revenueTooltip = `API Error (${lastApiCheckStr}). Error: ${errorMsg}.`;
@@ -80,13 +72,13 @@
           else revenueTooltip += ` No Manual entries found.`;
           break;
       case 'api':
-          revenueStatusHTML = `<span title="API Sourced" class="text-blue-500">⚙️</span>`; // Placeholder icon
+          revenueStatusHTML = `<span title="API Sourced" class="text-blue-500">⚙️</span>`;
           revenueTooltip = `Displaying total from Adsterra API (Checked: ${lastApiCheckStr})`;
           break;
       case 'manual':
       default:
           if (effectiveRevenueData.manualSumUSD > 0) {
-              revenueStatusHTML = `<span title="Manual Sourced" class="text-gray-500">📝</span>`; // Placeholder icon
+              revenueStatusHTML = `<span title="Manual Sourced" class="text-gray-500">📝</span>`;
               revenueTooltip = "Displaying SUM of manually entered revenue periods.";
           } else {
               revenueStatusHTML = '';
@@ -98,17 +90,14 @@
   const revenueUSDStr = displayRevenueUSD != null ? formatCurrency(displayRevenueUSD, 'USD') : '-';
   const revenuePKRStr = displayRevenueUSD != null && displayRevenueUSD > 0 && displayRevenuePKR != null ? `(${formatCurrency(displayRevenuePKR, 'PKR')})` : '';
 
-  // Toggle Button (will be functional later)
   const toggleButtonTooltip = isSuspended ? 'Activate Account' : 'Suspend Account';
   const toggleIconClasses = isSuspended ? 'bg-green-100 text-green-700 hover:bg-green-200 focus:ring-green-500' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 focus:ring-yellow-500';
-  // Placeholder toggle icon
   const toggleIconSymbol = isSuspended ? '▶️' : '⏸️';
 
-
-  // Event handlers for buttons (will be implemented later)
-  const handleToggleStatus = () => console.log('Toggle status for:', partner.id);
-  const handleEdit = () => console.log('Edit partner:', partner.id);
-  const handleDelete = () => console.log('Delete partner:', partner.id);
+  // Dispatch events instead of console.log
+  const requestToggleStatus = () => dispatch('requestToggleStatus', partner);
+  const requestEdit = () => dispatch('requestEdit', partner);
+  const requestDelete = () => dispatch('requestDelete', partner); // This one is new/modified
 
 </script>
 
@@ -121,15 +110,15 @@
   <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{partner.multi_account_no || '-'}</td>
   <td class="px-4 py-3 text-left whitespace-nowrap text-sm">
     <a href={partner.adstera_link || '#'} target="_blank" rel="noopener noreferrer"
-       class="truncate max-w-[120px] block {partner.adstera_link ? 'text-blue-600 hover:text-blue-800 hover:underline' : 'text-gray-400 cursor-default'}"
-       title={partner.adstera_link || ''}>
+        class="truncate max-w-[120px] block {partner.adstera_link ? 'text-blue-600 hover:text-blue-800 hover:underline' : 'text-gray-400 cursor-default'}"
+        title={partner.adstera_link || ''}>
       {partner.adstera_link ? (partner.adstera_link.length > 20 ? partner.adstera_link.substring(0,20) + '...' : partner.adstera_link) : '-'}
     </a>
   </td>
   <td class="px-4 py-3 text-left whitespace-nowrap text-sm">
-     <a href={partner.adstera_email_link || '#'} target="_blank" rel="noopener noreferrer"
-       class="truncate max-w-[120px] block {partner.adstera_email_link ? 'text-blue-600 hover:text-blue-800 hover:underline' : 'text-gray-400 cursor-default'}"
-       title={partner.adstera_email_link || ''}>
+      <a href={partner.adstera_email_link || '#'} target="_blank" rel="noopener noreferrer"
+        class="truncate max-w-[120px] block {partner.adstera_email_link ? 'text-blue-600 hover:text-blue-800 hover:underline' : 'text-gray-400 cursor-default'}"
+        title={partner.adstera_email_link || ''}>
       {partner.adstera_email_link ? (partner.adstera_email_link.length > 20 ? partner.adstera_email_link.substring(0,20) + '...' : partner.adstera_email_link) : '-'}
     </a>
   </td>
@@ -147,7 +136,7 @@
           <span class="text-xs font-normal text-gray-500 block">{revenuePKRStr}</span>
         {/if}
       </div>
-      {@html revenueStatusHTML} <!-- Or use Svelte components for icons -->
+      {@html revenueStatusHTML}
     </div>
   </td>
   <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
@@ -162,17 +151,17 @@
     </span>
   </td>
   <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium space-x-1">
-    <button on:click={handleToggleStatus} title={toggleButtonTooltip}
+    <button on:click={requestToggleStatus} title={toggleButtonTooltip}
             class="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 {toggleIconClasses}">
-            {@html toggleIconSymbol} <!-- Placeholder for SVG icon -->
+            {@html toggleIconSymbol}
     </button>
-    <button on:click={handleEdit} title="Edit Partner"
+    <button on:click={requestEdit} title="Edit Partner"
             class="p-1.5 rounded-md text-blue-600 hover:bg-blue-100 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 transition-colors">
-            ✏️ <!-- Placeholder for SVG icon -->
+            ✏️
     </button>
-    <button on:click={handleDelete} title="Delete Partner"
+    <button on:click={requestDelete} title="Delete Partner" 
             class="p-1.5 rounded-md text-red-600 hover:bg-red-100 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500 transition-colors">
-            🗑️ <!-- Placeholder for SVG icon -->
+            🗑️
     </button>
   </td>
 </tr>
