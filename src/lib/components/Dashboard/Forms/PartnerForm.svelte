@@ -2,19 +2,17 @@
 <script lang="ts">
   import type { Database } from '../../../types/supabase'; // Adjust path
   type PartnerRow = Database['public']['Tables']['partners']['Row'];
-  // type PartnerInsert = Database['public']['Tables']['partners']['Insert'];
 
   import { onMount, tick } from 'svelte';
-  import { formatDate, formatCurrency } from '$lib/utils/formatters'; // formatCurrency should be here
-  import { getMonthName, formatDateForInput } from '$lib/utils/helpers'; // Added formatDateForInput
-  import { PKR_RATE } from '$lib/utils/revenue'; // Added formatCurrency
+  import { formatDateForInput, getMonthName } from '$lib/utils/helpers'; // Moved formatDateForInput here
+  import { formatCurrency } from '$lib/utils/formatters'; // Corrected: formatCurrency is in formatters
+  import { PKR_RATE } from '$lib/utils/revenue';
 
-  export let partner: Partial<PartnerRow> | null = null; // For pre-filling
+  export let partner: Partial<PartnerRow> | null = null;
   export let formAction: string;
   export let submitButtonText: string = 'Submit';
-  export let serverErrors: Record<string, any> | null = null; // Can hold string or nested for field values
+  export let serverErrors: Record<string, any> | null = null;
 
-  // Form state
   let name = '';
   let mobile = '';
   let email = '';
@@ -27,10 +25,9 @@
   let account_creation_str = '';
   let account_start_str = '';
 
-  // Revenue section state
   let availableRevenuePeriods: string[] = [];
-  let selectedRevenuePeriodForEdit = ''; // For the <select> in edit mode
-  let revenuePeriodInputValue = '';      // Bound to the <input type="month">, for YYYY-MM
+  let selectedRevenuePeriodForEdit = '';
+  let revenuePeriodInputValue = ''; // For <input type="month">
   let revenueRateUSD: number | '' = '';
   let paymentStatus = 'pending';
 
@@ -38,9 +35,8 @@
   let revenueHelpBlockHTML = '';
 
   async function populateFormFields() {
-    await tick(); // Wait for Svelte to update DOM if partner prop just changed
-
-    const initialData = serverErrors?.data || partner; // Prioritize data from failed submission if available
+    await tick();
+    const initialData = serverErrors?.data || partner;
 
     name = initialData?.name ?? '';
     mobile = initialData?.mobile ?? '';
@@ -54,103 +50,58 @@
     account_creation_str = initialData?.account_creation ? formatDateForInput(initialData.account_creation) : '';
     account_start_str = initialData?.account_start ? formatDateForInput(initialData.account_start) : '';
 
-    // Revenue section pre-fill logic
-    // `serverErrors.data` might contain `revenuePeriod`, `revenueRateUSD`, `paymentStatus`
-    // from a previous submission attempt.
     const sourceForRevenue = serverErrors?.data || partner;
-
-    if (partner && partner.id && sourceForRevenue?.monthly_revenue) { // Check partner.id for edit mode context
+    if (partner?.id && sourceForRevenue?.monthly_revenue) {
       const monthlyData = sourceForRevenue.monthly_revenue as Record<string, any>;
-      availableRevenuePeriods = Object.keys(monthlyData).sort().reverse(); // Newest first
-      
-      // Default selected period: from server error, or latest existing, or empty
-      selectedRevenuePeriodForEdit = serverErrors?.data?.revenuePeriodFromSelect || // if server returns a specific select value
-                                     (availableRevenuePeriods.length > 0 ? availableRevenuePeriods[0] : '');
+      availableRevenuePeriods = Object.keys(monthlyData).sort().reverse();
+      selectedRevenuePeriodForEdit = serverErrors?.data?.revenuePeriodFromSelect || (availableRevenuePeriods.length > 0 ? availableRevenuePeriods[0] : '');
     } else {
-      availableRevenuePeriods = [];
-      selectedRevenuePeriodForEdit = '';
+      availableRevenuePeriods = []; selectedRevenuePeriodForEdit = '';
     }
-    
-    // `revenuePeriodInputValue` should be what the user manually types or from serverError if submitted
     revenuePeriodInputValue = serverErrors?.data?.revenuePeriod || '';
-
-    // If `selectedRevenuePeriodForEdit` has a value (either from existing data or server error return),
-    // then update revenueRateUSD and paymentStatus. This ensures `handleRevenuePeriodSelectionForEdit` runs.
-    // If server returned data for revenuePeriod, revenueRateUSD, paymentStatus explicitly, use those.
-    if(serverErrors?.data?.revenuePeriod) {
+    if (serverErrors?.data?.revenuePeriod) {
         revenuePeriodInputValue = serverErrors.data.revenuePeriod;
         revenueRateUSD = serverErrors.data.revenueRateUSD !== undefined ? serverErrors.data.revenueRateUSD : '';
         paymentStatus = serverErrors.data.paymentStatus || 'pending';
     } else if (selectedRevenuePeriodForEdit) {
-        handleRevenuePeriodSelectionForEdit(); // This will populate based on selected an existing period
+        handleRevenuePeriodSelectionForEdit();
     } else {
-        // Fresh add mode, or edit mode with no existing revenue periods
         revenueRateUSD = serverErrors?.data?.revenueRateUSD !== undefined ? serverErrors.data.revenueRateUSD : '';
         paymentStatus = serverErrors?.data?.paymentStatus || 'pending';
-    }
-
-    updateRevenueHelpBlockText(); // Initial call
-  }
-
-  onMount(() => {
-    populateFormFields();
-  });
-
-  // Re-populate if the partner object itself changes (e.g. modal reopens with different partner)
-  $: if (partner) {
-    // console.log("PartnerForm: partner prop changed, repopulating.", partner);
-    populateFormFields();
-  }
-  // Repopulate if serverErrors.data changes after a form submission error
-  $: if (serverErrors?.data) {
-    // console.log("PartnerForm: serverErrors.data changed, repopulating from server data.", serverErrors.data);
-    populateFormFields();
-  }
-
-
-  function handleRevenuePeriodSelectionForEdit() {
-    // When user *selects* from the dropdown (in edit mode)
-    revenuePeriodInputValue = selectedRevenuePeriodForEdit; // Update the <input type="month">
-    const currentPartnerData = serverErrors?.data || partner; // Prefer form data from failed submit
-
-    if (currentPartnerData?.monthly_revenue && selectedRevenuePeriodForEdit) {
-      const monthlyData = currentPartnerData.monthly_revenue as Record<string, any>;
-      const entry = monthlyData[selectedRevenuePeriodForEdit];
-      if (entry) {
-        revenueRateUSD = entry.usd ?? '';
-        paymentStatus = entry.status ?? 'pending';
-      } else { // Period selected, but no data exists for it (e.g. selecting "add new" after populating dropdown)
-        revenueRateUSD = '';
-        paymentStatus = 'pending';
-      }
-    } else if (!selectedRevenuePeriodForEdit) { // E.g., "-- Select a period --" is chosen
-        revenueRateUSD = '';
-        paymentStatus = 'pending';
-        // Keep revenuePeriodInputValue as is, user might type into it next
     }
     updateRevenueHelpBlockText();
   }
 
-  // Handles when user types into the <input type="month"> directly
+  onMount(() => { populateFormFields(); });
+  $: if (partner) { populateFormFields(); }
+  $: if (serverErrors?.data) { populateFormFields(); }
+
+  function handleRevenuePeriodSelectionForEdit() {
+    revenuePeriodInputValue = selectedRevenuePeriodForEdit;
+    const currentPartnerData = serverErrors?.data || partner;
+    if (currentPartnerData?.monthly_revenue && selectedRevenuePeriodForEdit) {
+      const monthlyData = currentPartnerData.monthly_revenue as Record<string, any>;
+      const entry = monthlyData[selectedRevenuePeriodForEdit];
+      if (entry) { revenueRateUSD = entry.usd ?? ''; paymentStatus = entry.status ?? 'pending'; }
+      else { revenueRateUSD = ''; paymentStatus = 'pending'; }
+    } else if (!selectedRevenuePeriodForEdit) { revenueRateUSD = ''; paymentStatus = 'pending'; }
+    updateRevenueHelpBlockText();
+  }
+
   function handleManualRevenuePeriodInputChange() {
-    // selectedRevenuePeriodForEdit should clear or try to match if a dropdown exists
     if (availableRevenuePeriods.includes(revenuePeriodInputValue)) {
         selectedRevenuePeriodForEdit = revenuePeriodInputValue;
-        handleRevenuePeriodSelectionForEdit(); // Will prefill from existing data
+        handleRevenuePeriodSelectionForEdit();
     } else {
-        // User is typing a new, non-existing period. Clear rate/status.
-        selectedRevenuePeriodForEdit = ''; // Deselect from dropdown
-        revenueRateUSD = '';
-        paymentStatus = 'pending';
+        selectedRevenuePeriodForEdit = ''; revenueRateUSD = ''; paymentStatus = 'pending';
     }
     updateRevenueHelpBlockText();
   }
 
   function updateRevenueHelpBlockText() {
     let helpHtml = `<span class="text-xs text-gray-500">${pkrHelpText}`;
-    const periodForDisplay = revenuePeriodInputValue || selectedRevenuePeriodForEdit; // What's active
-    const currentPartnerData = serverErrors?.data || partner; // Data context
-
+    const periodForDisplay = revenuePeriodInputValue || selectedRevenuePeriodForEdit;
+    const currentPartnerData = serverErrors?.data || partner;
     if (partner?.id && periodForDisplay && (currentPartnerData?.monthly_revenue as Record<string, any>)?.[periodForDisplay]) {
         const entry = (currentPartnerData?.monthly_revenue as Record<string, any>)[periodForDisplay];
         helpHtml += ` Editing for <strong>${getMonthName(periodForDisplay)}</strong>. Current: ${formatCurrency(entry.usd ?? 0)} (${entry.status || 'N/A'}). Clearing amount will delete entry.`;
@@ -172,14 +123,14 @@
   let nameInvalid = false;
   let mobileInvalid = false;
   let emailInvalid = false;
-  let revenueRateInvalid = false;
-  let revenuePeriodInvalid = false;
+  let revenueRateUSDInvalid = false; // Renamed for clarity
+  let revenuePeriodInputInvalid = false; // Renamed for clarity
 
   function validateName() { nameInvalid = !(!!name && String(name).trim().length > 0); }
   function validateMobile() { mobileInvalid = !(!!mobile && String(mobile).trim().length > 0); }
   function validateEmail() { emailInvalid = !(!!email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email))); }
-  function validateRevenueRate() { revenueRateInvalid = !(revenueRateUSD === '' || (typeof revenueRateUSD === 'number' && revenueRateUSD >= 0)); }
-  function validateRevenuePeriod() { revenuePeriodInvalid = !!(revenueRateUSD !== '' && !revenuePeriodInputValue); }
+  function validateRevenueRateUSD() { revenueRateUSDInvalid = !(revenueRateUSD === '' || (typeof revenueRateUSD === 'number' && revenueRateUSD >= 0)); }
+  function validateRevenuePeriodInput() { revenuePeriodInputInvalid = !!(revenueRateUSD !== '' && !revenuePeriodInputValue); }
 
 </script>
 
@@ -307,11 +258,11 @@
         <input id="form-revenuePeriod-{partner?.id || 'add'}" name="revenuePeriod" type="month"
                bind:value={revenuePeriodInputValue}
                on:input={handleManualRevenuePeriodInputChange}
-               on:blur={() => validateField('revenuePeriod', revenuePeriodInputValue)}
+               on:blur={validateRevenuePeriodInput}
                class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-               class:border-red-500={revenuePeriodInvalid || !!getError('revenuePeriod')}
+               class:border-red-500={revenuePeriodInputInvalid || !!getError('revenuePeriod')}
                placeholder="YYYY-MM">
-        {#if revenuePeriodInvalid && !getError('revenuePeriod')} <span class="text-xs text-red-600 mt-1 block">Period required if rate entered.</span> {/if}
+        {#if revenuePeriodInputInvalid && !getError('revenuePeriod')} <span class="text-xs text-red-600 mt-1 block">Period required if rate entered.</span> {/if}
         {#if getError('revenuePeriod')} <span class="text-xs text-red-600 mt-1 block">{getError('revenuePeriod')}</span> {/if}
       </div>
       <!-- Revenue Rate (USD) -->
@@ -319,12 +270,12 @@
         <label for="form-revenueRateUSD-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Manual Revenue (USD)</label>
         <input id="form-revenueRateUSD-{partner?.id || 'add'}" name="revenueRateUSD" type="number" step="0.01" min="0"
                bind:value={revenueRateUSD}
-               on:blur={() => validateField('revenueRateUSD', revenueRateUSD)}
+               on:blur={validateRevenueRateUSD}
                class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-               class:border-red-500={revenueRateInvalid || !!getError('revenueRateUSD')}
+               class:border-red-500={revenueRateUSDInvalid || !!getError('revenueRateUSD')}
                placeholder="e.g., 15.50">
         <div class="mt-1 min-h-[1.5rem]">{@html revenueHelpBlockHTML}</div>
-        {#if revenueRateInvalid && !getError('revenueRateUSD')} <span class="text-xs text-red-600 mt-1 block">Must be a non-negative number.</span> {/if}
+        {#if revenueRateUSDInvalid && !getError('revenueRateUSD')} <span class="text-xs text-red-600 mt-1 block">Must be a non-negative number.</span> {/if}
         {#if getError('revenueRateUSD')} <span class="text-xs text-red-600 mt-1 block">{getError('revenueRateUSD')}</span> {/if}
       </div>
       <!-- Payment Status -->
@@ -347,6 +298,8 @@
     </button>
   </div>
 </form>
+
+<!-- Global style for .required-label::after should be in app.css -->
 
 <!--
   The <style> block is removed as most styling is now done with utility classes.

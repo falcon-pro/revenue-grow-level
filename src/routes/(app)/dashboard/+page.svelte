@@ -1,4 +1,4 @@
-<!-- src/routes/(app)/dashboard/+page.svelte -->
+<!-- src/routes/(app)/dashboard/+page.svelte (Guarded invalidateAll) -->
 <script lang="ts">
   import type { PageData, ActionData } from './$types';
   export let data: PageData;
@@ -16,15 +16,21 @@
 
   import { deserialize } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
+  import { browser } from '$app/environment'; // Import browser
 
+  // Modal States
   let showDeleteModal = false;
   let partnerToDelete: PartnerType | null = null;
   let showEditModal = false;
   let partnerToEdit: PartnerType | null = null;
   let showImportModal = false;
 
+  // Action Message State
   let actionMessage: string | null = null;
   let actionSuccess: boolean = false;
+
+  // Form Cache for message display logic
+  let formCacheKey: string | null = null; // Use a simple key based on action + message to detect actual change
 
   function displayActionMessage(message: string, success: boolean, duration: number = 5000) {
     actionMessage = message;
@@ -35,26 +41,35 @@
   function openImportModal() { showImportModal = true; }
   async function closeImportModal() {
     showImportModal = false;
-    // If the `form` prop was updated by an import action called via `use:enhance` (not our current manual fetch)
-    if (form?.action === '?/importPartners' && form?.success) {
-        displayActionMessage(form.message || 'Import processed.', true);
-        await invalidateAll();
+    if (form?.action === '?/importPartners' && form?.success && browser) { // Guard
+        // `form` should update via SvelteKit. This is an example if more complex state needs setting.
+        // For `importPartners` we use custom event `onImportSuccess` which is better.
+        // displayActionMessage(form.message || 'Import processed.', true);
+        // await invalidateAll();
     }
   }
   async function onImportSuccess(event: CustomEvent<{message?: string, count?: number}>) {
       displayActionMessage(event.detail.message || `Import successful, ${event.detail.count || 'some'} records processed.`, true, 7000);
-      await invalidateAll();
+      if (browser) { // Guard
+          await invalidateAll();
+      }
   }
-
 
   function openDeleteModal(partner: PartnerType) { partnerToDelete = partner; showDeleteModal = true; }
   async function closeDeleteModal() {
+    // Check against the form prop *after* the action completed
+    // `form` is reactive and updated by SvelteKit
     const wasSuccess = form?.action === '?/deletePartner' && form?.success === true;
     const msg = form?.message;
-    showDeleteModal = false; partnerToDelete = null;
-    if (wasSuccess) {
+
+    showDeleteModal = false;
+    partnerToDelete = null;
+
+    if (wasSuccess) { // `form.success` is already set if action returned it.
         displayActionMessage(msg || 'Partner deleted successfully.', true);
-        await invalidateAll();
+        if (browser) { // Guard invalidateAll
+            await invalidateAll();
+        }
     }
   }
 
@@ -62,17 +77,22 @@
   async function closeEditModal() {
     const wasSuccess = form?.action?.startsWith('?/editPartner') && form?.success === true;
     const msg = form?.message;
-    showEditModal = false; partnerToEdit = null;
+
+    showEditModal = false;
+    partnerToEdit = null;
+
     if (wasSuccess) {
         displayActionMessage(msg || 'Partner updated successfully.', true);
-        await invalidateAll();
+        if (browser) { // Guard invalidateAll
+            await invalidateAll();
+        }
     }
   }
 
   async function handleTogglePartnerStatus(partnerToToggle: PartnerType) {
     if (!partnerToToggle || !partnerToToggle.id) return;
     const partnerIndex = data.partners.findIndex(p => p.id === partnerToToggle.id);
-    if (partnerIndex === -1) { displayActionMessage("Error: Could not find partner to update locally.", false); return; }
+    if (partnerIndex === -1) { displayActionMessage("Error: Could not find partner locally.", false); return; }
 
     const originalStatus = data.partners[partnerIndex].account_status;
     const newStatus = originalStatus === 'active' ? 'suspended' : 'active';
@@ -88,43 +108,59 @@
         const result = deserialize(await response.text());
 
         if (result.type === 'success' && result.data?.data?.success === true) {
-            displayActionMessage(result.data.data.message || 'Status updated successfully!', true);
-            await invalidateAll(); // Confirm with server and get any other changes
+            displayActionMessage(result.data.data.message || 'Status updated!', true);
+            if (browser) { // Guard invalidateAll
+                await invalidateAll();
+            }
         } else {
-            const errorMsg = result.data?.data?.message || result.data?.message || result.error?.message || 'Failed to update status on server.';
+            const errorMsg = result.data?.data?.message || result.data?.message || result.error?.message || 'Failed to update status.';
             throw new Error(errorMsg);
         }
     } catch (err: any) {
-        displayActionMessage(err.message || 'An error occurred while updating status.', false);
+        displayActionMessage(err.message || 'Error updating status.', false);
         data.partners = data.partners.map((p, i) => i === partnerIndex ? { ...p, account_status: originalStatus } : p); // Revert
     }
   }
 
-  // Handle messages from standard (add/edit) form submissions via use:enhance
-  $: if (form && form.message && form.action !== formCache?.action) { // Check if form object *itself* changed meaningfully
-    if (form.action === '?/addPartner' || form.action?.startsWith('?/editPartner')) {
-        displayActionMessage(form.message, form.success === true);
-        if (form.success && form.action === '?/addPartner') {
-            invalidateAll(); // Invalidate for Add only here; Edit/Delete handled in closeXModal
+  // This reactive block handles messages for standard form submissions (Add/Edit)
+  // that update the `form` prop.
+  $: {
+    const currentFormKey = `${form?.action}-${form?.message}-${form?.success}`;
+    if (browser && form && form.message && currentFormKey !== formCacheKey) { // Check if form object has actually changed in relevant ways
+        if (form.action === '?/addPartner' || form.action?.startsWith('?/editPartner')) {
+            displayActionMessage(form.message, form.success === true);
+            if (form.success === true) {
+                if (form.action === '?/addPartner') {
+                    console.log("Client: Add partner successful (from form prop), invalidating data...");
+                    invalidateAll(); // Refresh list for add. Edit/Delete handled by closeXModal.
+                }
+            }
         }
+        formCacheKey = currentFormKey; // Update cache after processing
+    } else if (browser && form && !form.message && formCacheKey) {
+        // Form was cleared (e.g., navigation), clear cache so next message shows
+        formCacheKey = null;
     }
-    formCache = form; // Cache to compare against next change
   }
-  let formCache: ActionData | undefined | null = null; // For message display logic
 
 </script>
 
 <div class="space-y-8 p-4 md:p-6 lg:p-8">
   {#if actionMessage}
     <div class="p-4 mb-6 rounded-md text-sm border {actionSuccess ? 'bg-green-50 text-green-700 border-green-300' : 'bg-red-50 text-red-700 border-red-300'}" role="alert">
-      <p class="font-medium">{actionSuccess ? 'Success!' : 'Error!'}</p>
+      <p class="font-medium">{actionSuccess ? 'Success!' : (actionMessage.toLowerCase().includes('error') || !actionSuccess ? 'Error!' : 'Info')}</p>
       <p>{actionMessage}</p>
     </div>
   {/if}
 
   <div>
     <h2 class="text-xl md:text-2xl font-semibold text-gray-800 mb-4">Add New Partner / Revenue</h2>
-    <PartnerForm formAction="?/addPartner" submitButtonText="Add Partner Entry" serverErrors={form?.action === '?/addPartner' ? form : null} />
+    <!-- For addPartner, serverErrors comes from `form` prop when action matches -->
+    <PartnerForm
+      formAction="?/addPartner"
+      submitButtonText="Add Partner Entry"
+      serverErrors={form?.action === '?/addPartner' ? form : null}
+    />
   </div>
 
   <hr class="my-8 border-gray-300" />
@@ -143,7 +179,12 @@
     {#if data.partners === undefined || data.partners === null}
       <TableSkeleton rows={5} columns={16}/> <p class="text-center text-gray-500 mt-4">Loading partners...</p>
     {:else if data.partners.length > 0}
-      <PartnerTable partners={data.partners} on:requestDelete={(e)=>openDeleteModal(e.detail as PartnerType)} on:requestEdit={(e)=>openEditModal(e.detail as PartnerType)} on:requestToggleStatus={(e)=>handleTogglePartnerStatus(e.detail as PartnerType)}/>
+      <PartnerTable
+        partners={data.partners}
+        on:requestDelete={(e)=>openDeleteModal(e.detail as PartnerType)}
+        on:requestEdit={(e)=>openEditModal(e.detail as PartnerType)}
+        on:requestToggleStatus={(e)=>handleTogglePartnerStatus(e.detail as PartnerType)}
+      />
     {:else}
       <PartnerTable partners={[]} /> <p class="text-center text-gray-500 py-8 italic">No partners added yet.</p>
     {/if}
