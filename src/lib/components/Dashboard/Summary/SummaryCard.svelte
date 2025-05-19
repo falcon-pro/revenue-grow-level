@@ -14,7 +14,7 @@
       {@html iconHtml} <!-- For simple SVG strings or later a slot for component -->
     {/if}
   </div>
-  <p class="text-2xl font-bold {valueClasses} truncate">{value}</p>
+  <p class="text-xl sm:text-2xl font-bold {valueClasses} truncate">{value}</p>
   {#if description}
     <p class="text-xs text-gray-500 truncate">{description}</p>
   {/if}

@@ -134,7 +134,7 @@
 
 <div>
   <h2 class="text-xl font-semibold text-gray-800 mb-4">Account Summary</h2>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 p-5 bg-indigo-50 rounded-lg border border-indigo-200">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 p-3 sm:p-5 bg-indigo-50 rounded-lg border border-indigo-200">
     <SummaryCard label="Total Accounts" value={totalAccounts} description="(All Statuses)" valueClasses="text-indigo-700" />
     <SummaryCard label="Suspended" value={suspendedAccountsCount} description="Accounts" valueClasses="text-red-600" />
     <SummaryCard label="Total Counted Revenue" value={`${formatCurrency(totalCountedRevenueUSD)} / ${formatCurrency(totalCountedRevenuePKR, 'PKR')}`} description="(Rules applied)" valueClasses="text-green-700 !text-lg" />
@@ -142,9 +142,9 @@
     <SummaryCard label="Received Revenue" value={`${formatCurrency(receivedRevenueUSD)} / ${formatCurrency(receivedRevenuePKR, 'PKR')}`} description="(All, Period Received)" valueClasses="text-blue-700 !text-lg" />
 
     <!-- Monthly Revenue Filter Card -->
-    <div class="bg-white p-4 rounded-lg shadow border border-gray-200 lg:col-span-2 xl:col-span-full">
+     <div class="bg-white p-4 rounded-lg shadow border border-gray-200 sm:col-span-2 lg:col-span-3 xl:col-span-full">
         <label for="monthFilterSelect" class="block text-sm font-medium text-gray-600 mb-1">Revenue for Period</label>
-        <div class="flex flex-col sm:flex-row items-start sm:items-center sm:gap-x-4 gap-y-2">
+         <div class="flex flex-col sm:flex-row items-start sm:items-center sm:gap-x-4 gap-y-2">
             <select id="monthFilterSelect" bind:value={selectedMonthFilter}
                     class="form-select text-sm w-full sm:w-auto min-w-[150px] py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                 <option value="all">All Time</option>

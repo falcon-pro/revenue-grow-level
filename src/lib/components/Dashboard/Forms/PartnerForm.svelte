@@ -291,7 +291,7 @@
       </p>
     {/if}
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 mt-2">
+   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4 mt-4">
       <div class="form-group">
         <label for="form-revenuePeriod-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Revenue Period (YYYY-MM)</label>
         <input id="form-revenuePeriod-{partner?.id || 'add'}" name="revenuePeriod" type="month"

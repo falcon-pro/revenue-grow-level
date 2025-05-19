@@ -5,8 +5,6 @@
 </script>
 
 <div class="min-h-screen flex flex-col text-slate-800 bg-slate-50">
-  <ToastContainer /> 
-  <main class="flex-grow">
-    <slot />
-  </main>
+  <ToastContainer />
+  <main class="flex-grow"> <slot /> </main>
 </div>
