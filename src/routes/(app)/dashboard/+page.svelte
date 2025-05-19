@@ -2,56 +2,62 @@
 <script lang="ts">
   import type { PageData, ActionData } from './$types';
   export let data: PageData;
-  export let form: ActionData; // For addPartner results, and now potentially deletePartner results
+  export let form: ActionData; // For ALL form actions on this page
 
   import PartnerTable from '$lib/components/Dashboard/PartnerTable/PartnerTable.svelte';
   import TableSkeleton from '$lib/components/Dashboard/PartnerTable/TableSkeleton.svelte';
   import PartnerForm from '$lib/components/Dashboard/Forms/PartnerForm.svelte';
-  import DeletePartnerModal from '$lib/components/Modals/DeletePartnerModal.svelte'; // Import Delete Modal
-  import type { Partner as PartnerType } from '$lib/utils/types'; // Or your Supabase Partner type
+  import DeletePartnerModal from '$lib/components/Modals/DeletePartnerModal.svelte';
+  import EditPartnerModal from '$lib/components/Modals/EditPartnerModal.svelte'; // Import Edit Modal
+
+  // Assuming PartnerType is defined and imported correctly (e.g. from Supabase types)
+  import type { Database } from '../../../types/supabase';
+  type PartnerType = Database['public']['Tables']['partners']['Row'];
+
 
   let showDeleteModal = false;
-  let partnerToDelete: PartnerType | null = null; // Use your defined PartnerType
+  let partnerToDelete: PartnerType | null = null;
+  let showEditModal = false;
+  let partnerToEdit: PartnerType | null = null;
 
-  // Function to open the delete modal
-  function openDeleteModal(partner: PartnerType) { // Use PartnerType
+
+  function openDeleteModal(partner: PartnerType) {
     partnerToDelete = partner;
     showDeleteModal = true;
   }
-
   function closeDeleteModal() {
     showDeleteModal = false;
     partnerToDelete = null;
-    // Check if the delete action returned a success message to refresh data
-    // This `form` variable is updated by SvelteKit after ANY form action on this page completes.
-    if (form?.action === '?/deletePartner' && form?.success) {
-        // Trigger data invalidation to refresh the partner list
-        // This requires careful use of `invalidate` which we will cover properly
-        // For now, a manual refresh or just acknowledging the message is okay.
-        // invalidate((url) => url.pathname === '/dashboard'); // Example of invalidation
-        console.log("Delete successful, list should be refreshed if invalidation is implemented.");
+    if (form?.action === '?/deletePartner' && form?.success === true) {
+      // TODO: Invalidate partners data list for auto-refresh
+      // invalidate((url) => url.pathname === '/dashboard/partners'); or similar
     }
   }
 
-  // Reactive statements for messages from any action (add or delete)
+  function openEditModal(partner: PartnerType) {
+    partnerToEdit = { ...partner }; // Create a copy to avoid direct mutation if form binds deeply
+    showEditModal = true;
+  }
+  function closeEditModal() {
+    showEditModal = false;
+    partnerToEdit = null;
+    if (form?.action?.startsWith('?/editPartner') && form?.success === true) {
+        // TODO: Invalidate partners data list for auto-refresh
+    }
+  }
+
   let actionMessage: string | null = null;
   let actionSuccess: boolean = false;
-  $: if (form?.message) {
+  $: if (form?.message) { // This 'form' prop is updated by SvelteKit after any action on this page
     actionMessage = form.message;
-    actionSuccess = form.success === true; // Ensure it's explicitly true
-    // Clear message after a few seconds
-    setTimeout(() => {
-        actionMessage = null;
-    }, 5000);
-    // If a delete was successful via use:enhance, the list won't auto-refresh without invalidation
-    // The form variable on the page is updated after any form action.
+    actionSuccess = form.success === true;
+    setTimeout(() => { actionMessage = null; }, 5000);
   }
 </script>
 
 <div class="space-y-8">
-  <!-- Message display for actions -->
   {#if actionMessage}
-    <div class="p-4 rounded-md {actionSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+    <div class="p-4 mb-4 rounded-md text-sm {actionSuccess ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}">
       {actionMessage}
     </div>
   {/if}
@@ -61,7 +67,7 @@
     <PartnerForm
       formAction="?/addPartner"
       submitButtonText="Add Partner Entry"
-      serverErrors={form?.action === '?/addPartner' ? form?.errors : null}
+      serverErrors={form?.action === '?/addPartner' ? form : null} 
     />
   </div>
 
@@ -74,10 +80,10 @@
     {#if data.partners === undefined || data.partners === null}
       <TableSkeleton rows={5} columns={16}/>
     {:else if data.partners.length > 0}
-      <!-- Listen for the requestDelete event from PartnerTable -->
       <PartnerTable
         partners={data.partners}
-        on:requestDelete={(event) => openDeleteModal(event.detail)}
+        on:requestDelete={(event) => openDeleteModal(event.detail as PartnerType)}
+        on:requestEdit={(event) => openEditModal(event.detail as PartnerType)}
       />
     {:else}
       <PartnerTable partners={[]} />
@@ -85,12 +91,20 @@
   </div>
 </div>
 
-<!-- Delete Partner Modal Instance -->
 {#if partnerToDelete}
   <DeletePartnerModal
     bind:showModal={showDeleteModal}
     partnerName={partnerToDelete.name}
     partnerId={partnerToDelete.id}
     on:close={closeDeleteModal}
+  />
+{/if}
+
+{#if partnerToEdit && showEditModal} 
+  <EditPartnerModal
+    bind:showModal={showEditModal}
+    partnerToEdit={partnerToEdit}
+    formResult={form} 
+    on:close={closeEditModal}
   />
 {/if}

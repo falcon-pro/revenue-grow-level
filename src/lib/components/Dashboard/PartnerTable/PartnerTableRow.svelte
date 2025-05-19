@@ -155,7 +155,7 @@
             class="p-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 {toggleIconClasses}">
             {@html toggleIconSymbol}
     </button>
-    <button on:click={requestEdit} title="Edit Partner"
+      <button on:click={() => dispatch('requestEdit', partner)} title="Edit Partner"
             class="p-1.5 rounded-md text-blue-600 hover:bg-blue-100 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 transition-colors">
             ✏️
     </button>
