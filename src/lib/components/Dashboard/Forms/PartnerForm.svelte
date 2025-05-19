@@ -1,15 +1,15 @@
 <!-- src/lib/components/Dashboard/Forms/PartnerForm.svelte -->
 <script lang="ts">
-  import type { Database } from '../../../types/supabase'; // Adjust path if this component is moved
+  import type { Database } from '../../../types/supabase';
   type PartnerRow = Database['public']['Tables']['partners']['Row'];
-  // type PartnerInsert = Database['public']['Tables']['partners']['Insert']; // Not directly used for defining form state types
-
+  
   import { onMount, tick, afterUpdate } from 'svelte';
   import { formatDateForInput, getMonthName } from '$lib/utils/helpers';
   import { formatCurrency } from '$lib/utils/formatters';
   import { PKR_RATE } from '$lib/utils/revenue';
+  import Icon from '../../Icon.svelte';
 
-  export let partner: Partial<PartnerRow> | null = null; // For pre-filling in Edit mode or if it's from serverErrors.data
+  export let partner: Partial<PartnerRow> | null = null;
   export let formAction: string;
   export let submitButtonText: string = 'Submit';
   export let serverErrors: { errors?: Record<string, string>, data?: Record<string, any>, message?: string, success?: boolean, action?:string } | null = null;
@@ -27,12 +27,12 @@
   let account_creation_str = '';
   let account_start_str = '';
 
-  // Revenue section specific state
-  let availableRevenuePeriods: string[] = [];         // For the <select> dropdown in edit mode
-  let selectedRevenuePeriodForEdit = '';             // Bound to the <select>
-  let revenuePeriodInputValue = '';                  // Bound to the <input type="month">, this is `name="revenuePeriod"`
-  let revenueRateUSD: number | '' = '';             // Bound to <input type="number">
-  let paymentStatus = 'pending';                     // Bound to revenue <select>
+  // Revenue section
+  let availableRevenuePeriods: string[] = [];
+  let selectedRevenuePeriodForEdit = '';
+  let revenuePeriodInputValue = '';
+  let revenueRateUSD: number | '' = '';
+  let paymentStatus = 'pending';
 
   let pkrHelpText = `PKR auto-calculated (Rate: ${PKR_RATE}).`;
   let revenueHelpBlockHTML = '';
@@ -222,116 +222,450 @@
 
 </script>
 
-<form method="POST" action={formAction} class="space-y-8">
-  <fieldset class="border p-4 pt-2 rounded-md shadow-sm bg-white">
-    <legend class="text-base font-medium text-gray-700 px-1">Partner Information</legend>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4 mt-4">
-      <!-- Unique IDs using partner.id for Edit form, 'add' for Add form -->
-      <div class="form-group">
-        <label for="form-name-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1 required-label">Full Name</label>
-        <input id="form-name-{partner?.id || 'add'}" name="name" bind:value={name} on:blur={validateName} required
-               class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-               class:border-red-500={nameInvalid || !!getError('name')} placeholder="John Doe">
-        {#if nameInvalid && !getError('name')} <span class="text-xs text-red-600 mt-1 block">Name is required.</span> {/if}
-        {#if getError('name')} <span class="text-xs text-red-600 mt-1 block">{getError('name')}</span> {/if}
+<div class="max-w-7xl mx-auto">
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <!-- Form Header -->
+    <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+      <div class="flex items-center justify-between">
+        <h2 class="text-2xl font-bold text-gray-800">
+          {#if partner && partner.id}
+            Edit Partner
+          {:else}
+            Add New Partner
+          {/if}
+        </h2>
+        {#if serverErrors?.message}
+          <div class="px-4 py-2 rounded-md bg-red-50 border border-red-200 text-red-600 text-sm">
+            {serverErrors.message}
+          </div>
+        {/if}
       </div>
-      <div class="form-group">
-        <label for="form-mobile-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1 required-label">Mobile</label>
-        <input id="form-mobile-{partner?.id || 'add'}" name="mobile" bind:value={mobile} on:blur={validateMobile} required
-               class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-               class:border-red-500={mobileInvalid || !!getError('mobile')} placeholder="+1234567890">
-        {#if mobileInvalid && !getError('mobile')} <span class="text-xs text-red-600 mt-1 block">Mobile is required.</span> {/if}
-        {#if getError('mobile')} <span class="text-xs text-red-600 mt-1 block">{getError('mobile')}</span> {/if}
-      </div>
-      <div class="form-group">
-        <label for="form-email-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1 required-label">Email</label>
-        <input id="form-email-{partner?.id || 'add'}" name="email" type="email" bind:value={email} on:blur={validateEmail} required
-               class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-               class:border-red-500={emailInvalid || !!getError('email')} placeholder="partner@example.com">
-        {#if emailInvalid && !getError('email')} <span class="text-xs text-red-600 mt-1 block">Valid email is required.</span> {/if}
-        {#if getError('email')} <span class="text-xs text-red-600 mt-1 block">{getError('email')}</span> {/if}
-      </div>
-      <div class="form-group">
-        <label for="form-address-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Address</label>
-        <input id="form-address-{partner?.id || 'add'}" name="address" bind:value={address} class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" class:border-red-500={!!getError('address')} placeholder="123 Main St">
-        {#if getError('address')} <span class="text-xs text-red-600 mt-1 block">{getError('address')}</span> {/if}
-      </div>
-      <div class="form-group"> <label for="form-webmoney-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Webmoney</label> <input id="form-webmoney-{partner?.id || 'add'}" name="webmoney" bind:value={webmoney} class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"> </div>
-      <div class="form-group"> <label for="form-multi_account_no-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Multi Acc No</label> <input id="form-multi_account_no-{partner?.id || 'add'}" name="multi_account_no" bind:value={multi_account_no} class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"> </div>
-      <div class="form-group"> <label for="form-adstera_link-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Adsterra Link</label> <input id="form-adstera_link-{partner?.id || 'add'}" name="adstera_link" type="url" bind:value={adstera_link} class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="https://..."> </div>
-      <div class="form-group"> <label for="form-adstera_email_link-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Adsterra Email</label> <input id="form-adstera_email_link-{partner?.id || 'add'}" name="adstera_email_link" type="url" bind:value={adstera_email_link} class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="https://..."> </div>
-      <div class="form-group"> <label for="form-adstera_api_key-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Adsterra API Key</label> <input id="form-adstera_api_key-{partner?.id || 'add'}" name="adstera_api_key" bind:value={adstera_api_key} class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="api_key_..."> </div>
-      <div class="form-group"> <label for="form-account_creation-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Creation Date</label> <input id="form-account_creation-{partner?.id || 'add'}" name="account_creation" type="datetime-local" bind:value={account_creation_str} class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"> </div>
-      <div class="form-group"> <label for="form-account_start-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label> <input id="form-account_start-{partner?.id || 'add'}" name="account_start" type="datetime-local" bind:value={account_start_str} class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"> </div>
     </div>
-  </fieldset>
 
-  <fieldset class="border p-4 pt-2 rounded-md shadow-sm bg-white">
-    <legend class="text-base font-medium text-gray-700 px-1">
-      {#if partner && partner.id}Update/Add Revenue for Period{:else}Revenue Entry (Optional){/if}
-    </legend>
+    <form method="POST" action={formAction} class="divide-y divide-gray-200">
+      <!-- Partner Information Section -->
+      <div class="px-6 py-5 space-y-6">
+        <div>
+          <h3 class="text-lg font-medium text-gray-900 flex items-center">
+            <Icon name="user" className="h-5 w-5 text-blue-500 mr-2" />
+            Partner Details
+          </h3>
+          <p class="mt-1 text-sm text-gray-500">Basic information about the partner.</p>
+        </div>
 
-    {#if partner && partner.id && availableRevenuePeriods.length > 0}
-      <div class="my-3">
-        <label for="form-selectRevenuePeriodForEdit-{partner.id}" class="block text-sm font-medium text-gray-700 mb-1">
-          Select Existing Period to Update/View
-        </label>
-        <select id="form-selectRevenuePeriodForEdit-{partner.id}"
+        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+          <!-- Name -->
+          <div class="sm:col-span-2">
+            <label for="form-name-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 required-label">
+             
+              Full Name
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-name-{partner?.id || 'add'}"
+                name="name"
+                bind:value={name}
+                on:blur={validateName}
+                required
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                class:border-red-500={nameInvalid || !!getError('name')}
+                placeholder="John Doe"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="user" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+            {#if nameInvalid && !getError('name')}
+              <p class="mt-2 text-sm text-red-600">Name is required.</p>
+            {/if}
+            {#if getError('name')}
+              <p class="mt-2 text-sm text-red-600">{getError('name')}</p>
+            {/if}
+          </div>
+
+          <!-- Mobile -->
+          <div class="sm:col-span-2">
+            <label for="form-mobile-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 required-label">
+              Mobile
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-mobile-{partner?.id || 'add'}"
+                name="mobile"
+                bind:value={mobile}
+                on:blur={validateMobile}
+                required
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                class:border-red-500={mobileInvalid || !!getError('mobile')}
+                placeholder="+1234567890"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="phone" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+            {#if mobileInvalid && !getError('mobile')}
+              <p class="mt-2 text-sm text-red-600">Mobile is required.</p>
+            {/if}
+            {#if getError('mobile')}
+              <p class="mt-2 text-sm text-red-600">{getError('mobile')}</p>
+            {/if}
+          </div>
+
+          <!-- Email -->
+          <div class="sm:col-span-2">
+            <label for="form-email-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 required-label">
+              Email
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-email-{partner?.id || 'add'}"
+                name="email"
+                type="email"
+                bind:value={email}
+                on:blur={validateEmail}
+                required
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                class:border-red-500={emailInvalid || !!getError('email')}
+                placeholder="partner@example.com"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="envelope" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+            {#if emailInvalid && !getError('email')}
+              <p class="mt-2 text-sm text-red-600">Valid email is required.</p>
+            {/if}
+            {#if getError('email')}
+              <p class="mt-2 text-sm text-red-600">{getError('email')}</p>
+            {/if}
+          </div>
+
+          <!-- Address -->
+          <div class="sm:col-span-2">
+            <label for="form-address-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Address
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-address-{partner?.id || 'add'}"
+                name="address"
+                bind:value={address}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                class:border-red-500={!!getError('address')}
+                placeholder="123 Main St"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="mapPin" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+            {#if getError('address')}
+              <p class="mt-2 text-sm text-red-600">{getError('address')}</p>
+            {/if}
+          </div>
+
+          <!-- Webmoney -->
+          <div class="sm:col-span-2">
+            <label for="form-webmoney-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Webmoney
+            </label>
+             <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-webmoney-{partner?.id || 'add'}"
+                name="webmoney"
+                bind:value={webmoney}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="currencyDollar" className="h-4 w-4 inline-block mr-1 text-gray-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Multi Account No -->
+          <div class="sm:col-span-2">
+            <label for="form-multi_account_no-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Multi Account No
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-multi_account_no-{partner?.id || 'add'}"
+                name="multi_account_no"
+                bind:value={multi_account_no}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="currencyDollar" className="h-4 w-4 inline-block mr-1 text-gray-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Adsterra Link -->
+          <div class="sm:col-span-2">
+            <label for="form-adstera_link-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Adsterra Link
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-adstera_link-{partner?.id || 'add'}"
+                name="adstera_link"
+                type="url"
+                bind:value={adstera_link}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="https://..."
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="link" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Adsterra Email Link -->
+          <div class="sm:col-span-2">
+            <label for="form-adstera_email_link-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Adsterra Email
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-adstera_email_link-{partner?.id || 'add'}"
+                name="adstera_email_link"
+                type="url"
+                bind:value={adstera_email_link}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="https://..."
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="link" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Adsterra API Key -->
+          <div class="sm:col-span-2">
+            <label for="form-adstera_api_key-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Adsterra API Key
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-adstera_api_key-{partner?.id || 'add'}"
+                name="adstera_api_key"
+                bind:value={adstera_api_key}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="api_key_..."
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="key" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Account Creation Date -->
+          <div class="sm:col-span-2">
+            <label for="form-account_creation-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Creation Date
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-account_creation-{partner?.id || 'add'}"
+                name="account_creation"
+                type="datetime-local"
+                bind:value={account_creation_str}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="calendar" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Account Start Date -->
+          <div class="sm:col-span-2">
+            <label for="form-account_start-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Start Date
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-account_start-{partner?.id || 'add'}"
+                name="account_start"
+                type="datetime-local"
+                bind:value={account_start_str}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="calendar" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Revenue Section -->
+      <div class="px-6 py-5 space-y-6">
+        <div>
+          <h3 class="text-lg font-medium text-gray-900 flex items-center">
+            <Icon name="currencyDollar" className="h-5 w-5 text-blue-500 mr-2" />
+            {#if partner && partner.id}Update/Add Revenue for Period{:else}Revenue Entry (Optional){/if}
+          </h3>
+          <p class="mt-1 text-sm text-gray-500">
+            {#if partner && partner.id}
+              Update existing revenue periods or add new ones.
+            {:else}
+              Add revenue information for this partner (can be added later).
+            {/if}
+          </p>
+        </div>
+
+        {#if partner && partner.id && availableRevenuePeriods.length > 0}
+          <div class="sm:col-span-6">
+            <label for="form-selectRevenuePeriodForEdit-{partner.id}" class="block text-sm font-medium text-gray-700">
+              <Icon name="chevronDown" className="h-4 w-4 inline-block mr-1 text-gray-500" />
+              Select Existing Period to Update/View
+            </label>
+            <div class="mt-1 relative">
+              <select
+                id="form-selectRevenuePeriodForEdit-{partner.id}"
                 bind:value={selectedRevenuePeriodForEdit}
                 on:change={handleRevenuePeriodSelectionForEdit}
-                class="form-select mt-1 block w-full md:w-2/3 lg:w-1/2 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-          <option value="">-- Select Period or Add New Below --</option>
-          {#each availableRevenuePeriods as periodOpt (periodOpt)}
-            <option value={periodOpt}>{getMonthName(periodOpt)}</option>
-          {/each}
-        </select>
-      </div>
-      <p class="text-sm text-gray-500 mb-3 italic">
-          The "Revenue Period (YYYY-MM)" input below is the one submitted. Use it to enter a new period or override selection.
-      </p>
-    {/if}
+                class="form-select block w-full pl-10 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+              >
+                <option value="">-- Select Period or Add New Below --</option>
+                {#each availableRevenuePeriods as periodOpt (periodOpt)}
+                  <option value={periodOpt}>{getMonthName(periodOpt)}</option>
+                {/each}
+              </select>
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="calendar" class="h-5 w-5 text-gray-400" />
+              </div>
+              <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <Icon name="chevronDown" class="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+            <p class="mt-2 text-sm text-gray-500 italic">
+              The "Revenue Period" input below is the one that will be submitted. Use it to enter a new period or override your selection.
+            </p>
+          </div>
+        {/if}
 
-   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4 mt-4">
-      <div class="form-group">
-        <label for="form-revenuePeriod-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Revenue Period (YYYY-MM)</label>
-        <input id="form-revenuePeriod-{partner?.id || 'add'}" name="revenuePeriod" type="month"
-               bind:value={revenuePeriodInputValue}
-               on:input={handleManualRevenuePeriodInputChange}
-               on:blur={validateRevenuePeriodInput}
-               class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-               class:border-red-500={revenuePeriodInputInvalid || !!getError('revenuePeriod')}
-               placeholder="YYYY-MM">
-        {#if revenuePeriodInputInvalid && !getError('revenuePeriod')} <span class="text-xs text-red-600 mt-1 block">Period (YYYY-MM) required if rate is entered.</span> {/if}
-        {#if getError('revenuePeriod')} <span class="text-xs text-red-600 mt-1 block">{getError('revenuePeriod')}</span> {/if}
-      </div>
-      <div class="form-group">
-        <label for="form-revenueRateUSD-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Manual Revenue (USD)</label>
-        <input id="form-revenueRateUSD-{partner?.id || 'add'}" name="revenueRateUSD" type="number" step="0.01" min="0"
-               bind:value={revenueRateUSD}
-               on:blur={validateRevenueRateUSD}
-               class="form-input mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-               class:border-red-500={revenueRateUSDInvalid || !!getError('revenueRateUSD')}
-               placeholder="e.g., 15.50">
-        <div class="mt-1 min-h-[2.25rem] leading-tight">{@html revenueHelpBlockHTML}</div>
-        {#if revenueRateUSDInvalid && !getError('revenueRateUSD')} <span class="text-xs text-red-600 mt-1 block">Must be a non-negative number.</span> {/if}
-        {#if getError('revenueRateUSD')} <span class="text-xs text-red-600 mt-1 block">{getError('revenueRateUSD')}</span> {/if}
-      </div>
-      <div class="form-group">
-        <label for="form-paymentStatus-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700 mb-1">Payment Status (for Period)</label>
-        <select id="form-paymentStatus-{partner?.id || 'add'}" name="paymentStatus" bind:value={paymentStatus}
-                class="form-select mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-          <option value="pending">Pending / Update Soon</option>
-          <option value="received">Received</option>
-          <option value="not_received">Not Received</option>
-        </select>
-      </div>
-    </div>
-  </fieldset>
+        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+          <!-- Revenue Period -->
+          <div class="sm:col-span-2">
+            <label for="form-revenuePeriod-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Revenue Period (YYYY-MM)
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-revenuePeriod-{partner?.id || 'add'}"
+                name="revenuePeriod"
+                type="month"
+                bind:value={revenuePeriodInputValue}
+                on:input={handleManualRevenuePeriodInputChange}
+                on:blur={validateRevenuePeriodInput}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                class:border-red-500={revenuePeriodInputInvalid || !!getError('revenuePeriod')}
+                placeholder="YYYY-MM"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="calendar" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+            {#if revenuePeriodInputInvalid && !getError('revenuePeriod')}
+              <p class="mt-2 text-sm text-red-600">Period (YYYY-MM) required if rate is entered.</p>
+            {/if}
+            {#if getError('revenuePeriod')}
+              <p class="mt-2 text-sm text-red-600">{getError('revenuePeriod')}</p>
+            {/if}
+          </div>
 
-  <div class="pt-2">
-    <button type="submit"
-            class="inline-flex items-center justify-center px-6 py-2.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
-      {submitButtonText}
-    </button>
+          <!-- Revenue Rate USD -->
+          <div class="sm:col-span-2">
+            <label for="form-revenueRateUSD-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Manual Revenue (USD)
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <input
+                id="form-revenueRateUSD-{partner?.id || 'add'}"
+                name="revenueRateUSD"
+                type="number"
+                step="0.01"
+                min="0"
+                bind:value={revenueRateUSD}
+                on:blur={validateRevenueRateUSD}
+                class="form-input block w-full pl-10 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                class:border-red-500={revenueRateUSDInvalid || !!getError('revenueRateUSD')}
+                placeholder="e.g., 15.50"
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="currencyDollar" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+            <div class="mt-1 min-h-[2.25rem] leading-tight">{@html revenueHelpBlockHTML}</div>
+            {#if revenueRateUSDInvalid && !getError('revenueRateUSD')}
+              <p class="mt-2 text-sm text-red-600">Must be a non-negative number.</p>
+            {/if}
+            {#if getError('revenueRateUSD')}
+              <p class="mt-2 text-sm text-red-600">{getError('revenueRateUSD')}</p>
+            {/if}
+          </div>
+
+          <!-- Payment Status -->
+          <div class="sm:col-span-2">
+            <label for="form-paymentStatus-{partner?.id || 'add'}" class="block text-sm font-medium text-gray-700">
+              Payment Status (for Period)
+            </label>
+            <div class="mt-1 relative rounded-md shadow-sm">
+              <select
+                id="form-paymentStatus-{partner?.id || 'add'}"
+                name="paymentStatus"
+                bind:value={paymentStatus}
+                class="form-select block w-full pl-10 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+              >
+                <option value="pending">Pending / Update Soon</option>
+                <option value="received">Received</option>
+                <option value="not_received">Not Received</option>
+              </select>
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Icon name="informationCircle" className="h-5 w-5 text-gray-400" />
+              </div>
+              <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <Icon name="chevronDown" className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form Footer -->
+      <div class="px-6 py-4 bg-gray-50 text-right">
+        <button
+          type="submit"
+          class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          <Icon name="check" class="h-5 w-5 mr-2" />
+          {submitButtonText}
+        </button>
+      </div>
+    </form>
   </div>
-</form>
+</div>
+
+<style>
+  .required-label:after {
+    content: " *";
+    color: #ef4444;
+  }
+  
+  .form-input, .form-select {
+    transition: all 0.2s ease;
+  }
+  
+  .form-input:focus, .form-select:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+  
+  .form-input.border-red-500, .form-select.border-red-500 {
+    border-color: #ef4444;
+  }
+  
+  .form-input.border-red-500:focus, .form-select.border-red-500:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  }
+</style>
