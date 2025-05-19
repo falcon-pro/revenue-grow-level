@@ -222,7 +222,7 @@
 
 </script>
 
-<div class="max-w-7xl mx-auto">
+<div class="mx-auto">
   <div class="bg-white shadow rounded-lg overflow-hidden">
     <!-- Form Header -->
     <div class="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
