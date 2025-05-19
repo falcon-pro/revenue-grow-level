@@ -9,6 +9,7 @@
   import PartnerForm from '$lib/components/Dashboard/Forms/PartnerForm.svelte';
   import DeletePartnerModal from '$lib/components/Modals/DeletePartnerModal.svelte';
   import EditPartnerModal from '$lib/components/Modals/EditPartnerModal.svelte';
+  import ImportModal from '$lib/components/Modals/ImportModal/ImportModal.svelte'; 
 
   import type { Database } from '../../../types/supabase'; // Adjust path if needed
   type PartnerType = Database['public']['Tables']['partners']['Row'];
@@ -25,6 +26,16 @@
   // Global Action Message State (for all actions on this page)
   let actionMessage: string | null = null;
   let actionSuccess: boolean = false;
+
+   let showImportModal = false; // New state for Import Modal
+
+  function openImportModal() {
+    showImportModal = true;
+  }
+  function closeImportModal() {
+    showImportModal = false;
+    // TODO: Reset import modal state (parsed data, selections) when fully implemented
+  }
 
   // --- Open/Close Modal Functions ---
   function openDeleteModal(partner: PartnerType) {
@@ -201,8 +212,23 @@
 
   <hr class="my-8 border-gray-300" />
 
-  <div>
-    <h2 class="text-xl md:text-2xl font-semibold text-gray-800 mb-4">Partner Records</h2>
+   <div>
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-5 gap-4">
+        <h2 class="text-xl md:text-2xl font-semibold text-gray-800 whitespace-nowrap">Partner Records</h2>
+        <div class="flex space-x-2">
+            <button
+                type="button"
+                on:click={openImportModal}
+                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+                <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                </svg>
+                Import Data
+            </button>
+        </div>
+    </div>
+
     {#if data.admin}
       <p class="mb-4 text-sm text-gray-600">Currently managing records for: <strong>{data.admin.id}</strong></p>
     {/if}
@@ -228,19 +254,11 @@
 
 <!-- Modal Instances -->
 {#if partnerToDelete && showDeleteModal}
-  <DeletePartnerModal
-    bind:showModal={showDeleteModal}
-    partnerName={partnerToDelete.name}
-    partnerId={partnerToDelete.id}
-    on:close={closeDeleteModal}
-  />
+  <DeletePartnerModal bind:showModal={showDeleteModal} partnerName={partnerToDelete.name} partnerId={partnerToDelete.id} on:close={closeDeleteModal} />
+{/if}
+{#if partnerToEdit && showEditModal}
+  <EditPartnerModal bind:showModal={showEditModal} partnerToEdit={partnerToEdit} formResult={form} on:close={closeEditModal} />
 {/if}
 
-{#if partnerToEdit && showEditModal}
-  <EditPartnerModal
-    bind:showModal={showEditModal}
-    partnerToEdit={partnerToEdit}
-    formResult={form} 
-    on:close={closeEditModal}
-  />
-{/if}
+<!-- Import Modal Instance -->
+<ImportModal bind:showModal={showImportModal} on:close={closeImportModal} />
