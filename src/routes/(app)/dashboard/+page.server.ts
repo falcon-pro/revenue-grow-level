@@ -282,8 +282,62 @@ function shapeImportedPartnerDataForDb(importedRowMappedData: Record<string, any
 
 
 // --- SVELTEKIT ACTIONS ---
+// src/routes/(app)/dashboard/+page.server.ts
+// ... (existing imports, types, load function, helper functions) ...
+
 export const actions: Actions = {
-    addPartner: async ({ request, locals }) => {
+    addPartner: async ({ request, locals, fetch }) => { // Add `fetch` to params
+        // ... (existing validation logic for addPartner) ...
+        // Inside the block after successful Supabase insert:
+        // if (insertError) { ... }
+
+        // const { data: partnerDataToInsert, ... } = processNewPartnerFormData(...)
+        // Let's assume partnerDataToInsert is available here after processing but before insertion if we want its ID
+        // OR, we fetch the newly created partner if insert was by PK to get the ID
+
+        // Simpler: If insert was successful, and partnerDataToInsert HAD an API key making revenue_source 'api_loading'
+        // We need the ID of the newly created partner.
+        // The `.insert()` doesn't easily return the ID by default without a .select().single() and assuming only one insert.
+
+        // Best approach after insert: The `addPartner` function should return enough info
+        // or the client should invalidate and the list update triggers UI change for 'api_loading'.
+        // The 'api_loading' itself can be a visual cue. A separate "fetch revenue" button per row,
+        // or the "Refresh All API" covers the fetching after initial add.
+
+        // FOR SIMPLICITY for now: We will rely on 'Refresh All' or a manual trigger.
+        // Auto-triggering here requires getting the newly created partner's ID back robustly,
+        // which can be done with `.insert(partnerDataToInsert).select('id').single()` if only one.
+        // If we want to trigger, it would look like this:
+
+        /*
+        // --- Hypothetical auto-trigger logic for addPartner ---
+        const { data: newPartner, error: insertError } = await supabase
+            .from('partners')
+            .insert(partnerDataToInsert)
+            .select('id, adstera_api_key, revenue_source') // select the ID and key/source
+            .single();
+
+        if (insertError) {
+            // ... handle insertError ...
+            return fail(500, { message: `DB error: ${insertError.message}`, ... });
+        }
+
+        if (newPartner && newPartner.revenue_source === 'api_loading' && newPartner.adstera_api_key) {
+            console.log(`[/dashboard addPartner action] New partner ${newPartner.id} has API key, queueing revenue fetch.`);
+            // Non-blocking call to our API endpoint
+            fetch('/api/fetch-adsterra-revenue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partnerId: newPartner.id })
+            }).catch(err => console.error("Error auto-fetching revenue for new partner:", err));
+            // Don't await this, let it run in the background.
+        }
+        return { success: true, message: 'Partner added successfully!', action: '?/addPartner' };
+        // --- End hypothetical ---
+        */
+
+        // CURRENT addPartner (keeping it simple, manual refresh for now)
+        // (Your existing addPartner logic for insertError handling and success return)
         if (!locals.admin || !locals.admin.id) { return fail(401, { success: false, message: 'Unauthorized.', errors: { general: 'Auth' }, action: '?/addPartner' }); }
         const adminId = locals.admin.id;
         const formData = await request.formData();
@@ -292,138 +346,180 @@ export const actions: Actions = {
         if (partnerDataToInsert.email && !validationErrors.email) {
             try {
                 const { count, error: emailCheckError } = await supabase.from('partners').select('id', { count: 'exact', head: true }).eq('admin_id', adminId).eq('email', partnerDataToInsert.email);
-                if (emailCheckError) { console.error("Add partner email check DB error:", emailCheckError); throw emailCheckError; }
-                if (count && count > 0) { validationErrors.email = 'This email address already exists for your partners.'; }
-            } catch (e: any) { return fail(500, { success: false, message: `Server error checking email: ${e.message}`, errors: validationErrors, data: Object.fromEntries(formData), action: '?/addPartner' }); }
+                if (emailCheckError) throw emailCheckError;
+                if (count && count > 0) validationErrors.email = 'This email already exists for your partners.';
+            } catch (e: any) { return fail(500, { success: false, message: `Server error: ${e.message}`, errors: validationErrors, data: Object.fromEntries(formData), action: '?/addPartner' }); }
         }
         if (Object.keys(validationErrors).length > 0) {
-            return fail(400, { success: false, message: 'Form has validation errors.', errors: validationErrors, data: Object.fromEntries(formData), action: '?/addPartner' });
+            return fail(400, { success: false, message: 'Form has errors.', errors: validationErrors, data: Object.fromEntries(formData), action: '?/addPartner' });
         }
-        const { error: insertError } = await supabase.from('partners').insert(partnerDataToInsert);
+        
+        // Modified insert to get ID back
+        const { data: insertedPartnerData, error: insertError } = await supabase
+            .from('partners')
+            .insert(partnerDataToInsert)
+            .select('id, adstera_api_key, revenue_source') // Select what's needed for API trigger
+            .single(); // Expecting one row
+
         if (insertError) {
-            console.error("Add partner DB insert error:", insertError);
-            if (insertError.code === '23505') return fail(409, { success: false, message: 'A partner with this email may already exist for your account.', errors: { email: 'This email might already be in use.' }, data: Object.fromEntries(formData), action: '?/addPartner' });
-            return fail(500, { success: false, message: `Database error adding partner: ${insertError.message}`, data: Object.fromEntries(formData), action: '?/addPartner' });
+            if (insertError.code === '23505') return fail(409, { success: false, message: 'Duplicate entry.', errors: { email: 'Email might be duplicate.' }, data: Object.fromEntries(formData), action: '?/addPartner' });
+            return fail(500, { success: false, message: `DB error: ${insertError.message}`, data: Object.fromEntries(formData), action: '?/addPartner' });
+        }
+
+        if (insertedPartnerData && insertedPartnerData.revenue_source === 'api_loading' && insertedPartnerData.adstera_api_key) {
+            console.log(`[/dashboard addPartner action] Partner ${insertedPartnerData.id} added with API key. Triggering initial revenue fetch.`);
+            // Fire-and-forget: We don't await this as the form action should return quickly.
+            // The `fetch` here is SvelteKit's server-side fetch, which can call relative paths.
+            fetch('/api/fetch-adsterra-revenue', { // This calls your own API endpoint
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partnerId: insertedPartnerData.id })
+            }).then(async (res) => {
+                if (!res.ok) console.error(`Auto-fetch for new partner ${insertedPartnerData.id} failed with status ${res.status}: ${await res.text()}`);
+                else console.log(`Auto-fetch for new partner ${insertedPartnerData.id} initiated.`);
+            }).catch(err => console.error("Error initiating auto-fetch for new partner:", err));
         }
         return { success: true, message: 'Partner added successfully!', action: '?/addPartner' };
     },
 
-    deletePartner: async ({ request, locals }) => {
-        if (!locals.admin || !locals.admin.id) return fail(401, { success: false, message: 'Unauthorized.', action: '?/deletePartner' });
-        const adminId = locals.admin.id;
-        const formData = await request.formData();
-        const partnerId = formData.get('partnerId') as string;
-        if (!partnerId) return fail(400, { success: false, message: 'Partner ID is required.', action: '?/deletePartner' });
-        const { error: deleteError } = await supabase.from('partners').delete().eq('id', partnerId).eq('admin_id', adminId);
-        if (deleteError) { console.error("Delete partner DB error:", deleteError); return fail(500, { success: false, message: `Database error deleting partner: ${deleteError.message}`, action: '?/deletePartner' }); }
-        return { success: true, message: 'Partner deleted successfully.', action: '?/deletePartner' };
-    },
-
-    editPartner: async ({ request, locals, url }) => {
+    editPartner: async ({ request, locals, url, fetch }) => { // Add `fetch` to params
         const partnerIdToEdit = url.searchParams.get('id');
         const currentActionPath = `?/editPartner&id=${partnerIdToEdit || 'unknown'}`;
         console.log(`[/dashboard editPartner action (${currentActionPath})] Received submission.`);
 
-        if (!locals.admin || !locals.admin.id) { return fail(401, { success: false, message: 'Unauthorized.', errors: { general: 'Auth' }, action: currentActionPath }); }
+        if (!locals.admin || !locals.admin.id) { /* ... unauthorized ... */ return fail(401, { success: false, message: 'Unauthorized.', errors: { general: 'Auth' }, action: currentActionPath });}
         const adminId = locals.admin.id;
-        if (!partnerIdToEdit) { return fail(400, { success: false, message: 'Partner ID missing from request.', action: `?/editPartner` }); } // Generic action if ID really gone
+        if (!partnerIdToEdit) { /* ... missing ID ... */ return fail(400, { success: false, message: 'Partner ID missing.', action: `?/editPartner` });}
 
         const { data: existingPartner, error: fetchError } = await supabase.from('partners').select('*').eq('id', partnerIdToEdit).eq('admin_id', adminId).single();
-        if (fetchError || !existingPartner) { console.error(`Edit partner - fetch existing error or not found (ID: ${partnerIdToEdit}) :`, fetchError); return fail(404, { success: false, message: 'Partner not found or not accessible.', action: currentActionPath }); }
+        if (fetchError || !existingPartner) { /* ... not found ... */ return fail(404, { success: false, message: 'Partner not found or access denied.', action: currentActionPath });}
 
         const formData = await request.formData();
         const { data: partnerDataToUpdate, errors: validationErrors } = processEditPartnerFormData(formData, existingPartner);
 
-        if (partnerDataToUpdate.email && partnerDataToUpdate.email !== existingPartner.email && !validationErrors.email) {
-            try {
-                const { count, error: emailCheckError } = await supabase.from('partners').select('id', { count: 'exact', head: true }).eq('admin_id', adminId).eq('email', partnerDataToUpdate.email as string).neq('id', partnerIdToEdit);
-                if (emailCheckError) { console.error("Edit partner email check DB error:", emailCheckError); throw emailCheckError; }
-                if (count && count > 0) { validationErrors.email = 'This email address already exists for another of your partners.'; }
-            } catch (e: any) { return fail(500, { success: false, message: `Server error during email uniqueness check: ${e.message}`, errors: validationErrors, data: Object.fromEntries(formData), action: currentActionPath }); }
-        }
-        console.log(`[/dashboard editPartner action] Validation Errors after all checks:`, JSON.stringify(validationErrors));
+        // ... (email uniqueness check from previous complete code for editPartner) ...
+        if (partnerDataToUpdate.email && partnerDataToUpdate.email !== existingPartner.email && !validationErrors.email) { try { const { count, error: emailCheckError } = await supabase.from('partners').select('id', { count: 'exact', head: true }).eq('admin_id', adminId).eq('email', partnerDataToUpdate.email as string).neq('id', partnerIdToEdit); if (emailCheckError) throw emailCheckError; if (count && count > 0) { validationErrors.email = 'This email address already exists for another partner.'; } } catch (e: any) { return fail(500, { success: false, message: `Server error during email check: ${e.message}`, errors: validationErrors, data: Object.fromEntries(formData), action: currentActionPath }); } }
+
 
         if (Object.keys(validationErrors).length > 0) {
-            console.log(`[/dashboard editPartner action (${currentActionPath})] Validation errors returned to client.`);
-            const formValues: Record<string, any> = {}; formData.forEach((value, key) => formValues[key] = value);
-            const repopulateData = { ...existingPartner, ...formValues, monthly_revenue: existingPartner.monthly_revenue }; // Key parts for repopulation
-            return fail(400, { success: false, message: 'Form has errors. Please correct them.', errors: validationErrors, data: repopulateData, action: currentActionPath });
-        }
-        
-        // If dataToUpdate is empty (no actual changes were made to updatable fields),
-        // we can consider it a success without hitting the DB.
-        if (Object.keys(partnerDataToUpdate).length === 0) {
-            console.log(`[/dashboard editPartner action (${currentActionPath})] No actual changes detected for partner. Returning success.`);
-            return { success: true, message: 'No changes detected for partner.', action: currentActionPath };
+            /* ... fail with validation errors ... */
+            const formValues: Record<string, any> = {}; formData.forEach((value, key) => formValues[key] = value); const repopulateData = { ...existingPartner, ...formValues, monthly_revenue: existingPartner.monthly_revenue }; return fail(400, { success: false, message: 'Form has errors.', errors: validationErrors, data: repopulateData, action: currentActionPath });
         }
 
-        console.log(`[/dashboard editPartner action (${currentActionPath})] Attempting to update partner with data:`, JSON.stringify(partnerDataToUpdate));
-        const { error: updateError } = await supabase.from('partners').update(partnerDataToUpdate).eq('id', partnerIdToEdit).eq('admin_id', adminId);
-        if (updateError) { console.error("Edit partner DB update error:", updateError); return fail(500, { success: false, message: `Database error during partner update: ${updateError.message}`, action: currentActionPath }); }
-        
-        console.log(`[/dashboard editPartner action (${currentActionPath})] Partner updated successfully.`);
+        // Check if API key was actually part of the update and changed,
+        // or if revenue_source in the update payload is 'api_loading'.
+        const apiKeyActuallyChanged = partnerDataToUpdate.adstera_api_key !== undefined &&
+                                    partnerDataToUpdate.adstera_api_key !== existingPartner.adstera_api_key;
+        const shouldTriggerApiFetch = apiKeyActuallyChanged || partnerDataToUpdate.revenue_source === 'api_loading';
+
+
+        if (Object.keys(partnerDataToUpdate).length === 0 && !shouldTriggerApiFetch) { // Also ensure if only key changed and needs fetch, it proceeds
+             console.log(`[/dashboard editPartner action (${currentActionPath})] No actual data changes to save (excluding API key check for fetch).`);
+             // If API key changed, revenue_source would be 'api_loading' which means partnerDataToUpdate ISN'T empty
+             // So this check for empty partnerDataToUpdate is tricky with implicit API key effects
+             if (apiKeyActuallyChanged && partnerDataToUpdate.adstera_api_key) {
+                 // Only an API key change, no other field changes. Proceed to fetch, skip DB update.
+                 console.log(`[/dashboard editPartner action] API key changed for ${partnerIdToEdit}. Triggering revenue fetch.`);
+                 fetch('/api/fetch-adsterra-revenue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partnerId: partnerIdToEdit })
+                }).then(async (res) => {
+                    if (!res.ok) console.error(`Auto-fetch for edited partner ${partnerIdToEdit} failed with status ${res.status}: ${await res.text()}`);
+                    else console.log(`Auto-fetch for edited partner ${partnerIdToEdit} initiated.`);
+                }).catch(err => console.error("Error initiating auto-fetch for edited partner:", err));
+                 return { success: true, message: 'API key updated, revenue fetch initiated.', action: currentActionPath };
+             }
+             return { success: true, message: 'No changes detected for partner.', action: currentActionPath };
+        }
+
+
+        const { error: updateError } = await supabase
+            .from('partners')
+            .update(partnerDataToUpdate)
+            .eq('id', partnerIdToEdit)
+            .eq('admin_id', adminId);
+
+        if (updateError) { /* ... fail with update error ... */ return fail(500, { success: false, message: `Database error during partner update: ${updateError.message}`, action: currentActionPath });}
+
+        if (shouldTriggerApiFetch && partnerDataToUpdate.adstera_api_key) { // Or use finalApiKey logic if new key is null
+            console.log(`[/dashboard editPartner action] Partner ${partnerIdToEdit} updated, API key present/changed. Triggering revenue fetch.`);
+            fetch('/api/fetch-adsterra-revenue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partnerId: partnerIdToEdit })
+            }).then(async (res) => {
+                if (!res.ok) console.error(`Auto-fetch for edited partner ${partnerIdToEdit} (post-update) failed: ${await res.text()}`);
+                else console.log(`Auto-fetch for edited partner ${partnerIdToEdit} (post-update) initiated.`);
+            }).catch(err => console.error("Error initiating auto-fetch for edited partner (post-update):", err));
+        }
+
         return { success: true, message: 'Partner updated successfully!', action: currentActionPath };
     },
 
-    toggleAccountStatus: async ({ request, locals }) => {
-        if (!locals.admin || !locals.admin.id) { return fail(401, { success: false, message: 'Unauthorized.' }); }
+    // ... (deletePartner, toggleAccountStatus, importPartners actions are the same) ...
+     deletePartner: async ({ request, locals }) => { if (!locals.admin || !locals.admin.id) return fail(401, { success: false, message: 'Unauthorized.', action: '?/deletePartner' }); const adminId = locals.admin.id; const formData = await request.formData(); const partnerId = formData.get('partnerId') as string; if (!partnerId) return fail(400, { success: false, message: 'Partner ID required.', action: '?/deletePartner' }); const { error: delError } = await supabase.from('partners').delete().eq('id', partnerId).eq('admin_id', adminId); if (delError) return fail(500, { success: false, message: `DB error: ${delError.message}`, action: '?/deletePartner' }); return { success: true, message: 'Partner deleted.', action: '?/deletePartner' }; },
+     toggleAccountStatus: async ({ request, locals }) => { if (!locals.admin || !locals.admin.id) { return fail(401, { success: false, message: 'Unauthorized.' }); } const adminId = locals.admin.id; const formData = await request.formData(); const partnerId = formData.get('partnerId') as string; const currentStatus = formData.get('currentStatus') as string; if (!partnerId || !currentStatus) { return fail(400, { success: false, message: 'ID & status required.' }); } const newStatus = currentStatus === 'active' ? 'suspended' : 'active'; const { error: updateError } = await supabase.from('partners').update({ account_status: newStatus, updated_at: new Date().toISOString() }).eq('id', partnerId).eq('admin_id', adminId); if (updateError) { return fail(500, { success: false, message: `DB error: ${updateError.message}` }); } return { type: 'success', status: 200, data: { success: true, message: `Status updated to ${newStatus}.` }}; },
+     importPartners: async ({ request, locals }): Promise<ActionResult> => { if (!locals.admin || !locals.admin.id) { return fail(401, { success: false, message: 'Unauthorized for import.' }); } const adminId = locals.admin.id; const formData = await request.formData(); const partnersToImportJson = formData.get('partnersToImportJson') as string; if (!partnersToImportJson) { return fail(400, { success: false, message: 'No import data received.' }); } let partnersToImport: Array<Record<string, any>>; try { partnersToImport = JSON.parse(partnersToImportJson); if (!Array.isArray(partnersToImport) || partnersToImport.length === 0) { throw new Error("Data not array or empty."); } } catch (e: any) { return fail(400, { success: false, message: `Invalid import data: ${e.message}` }); } const resultsReport = { successfulUpserts: 0, failedRowsInfo: [] as { originalIndex?: number, email?: string, error: string }[] }; const importedEmails = partnersToImport.map(p => p.email?.toLowerCase()).filter(Boolean) as string[]; let existingPartnersMap = new Map<string, PartnerRow>(); if (importedEmails.length > 0) { const { data: dbPartners, error: fetchErr } = await supabase.from('partners').select('*').eq('admin_id', adminId).in('email', importedEmails); if (fetchErr) { return fail(500, { success: false, message: `DB error preparing import: ${fetchErr.message}`}); } dbPartners?.forEach(p => { if(p.email) existingPartnersMap.set(p.email.toLowerCase(), p); }); } const upsertOperations: Array<PartnerUpdate | PartnerInsert> = []; for (const importedRow of partnersToImport) { const emailKey = importedRow.email?.toLowerCase(); if (!emailKey) { resultsReport.failedRowsInfo.push({ originalIndex: importedRow._originalIndexExcel, email: importedRow.email, error: "Email missing/invalid." }); continue; } const existingPartner = existingPartnersMap.get(emailKey) || null; let shapedData = shapeImportedPartnerDataForDb(importedRow, adminId, existingPartner); if (existingPartner) { (shapedData as PartnerUpdate).id = existingPartner.id; } upsertOperations.push(shapedData as (PartnerUpdate | PartnerInsert)); } if (upsertOperations.length > 0) { const { error: batchError, count } = await supabase.from('partners').upsert(upsertOperations, { onConflict: 'admin_id,email' }); if (batchError) { console.error("Supabase batch upsert error for import:", batchError); return fail(500, { success: false, message: `Import DB error: ${batchError.message}.`, data: { errorsByRow: [{ error: batchError.message, email:"Batch Operation" }] } }); } resultsReport.successfulUpserts = count ?? upsertOperations.length; } if (resultsReport.failedRowsInfo.length > 0) { return fail(400, { success: false, message: `Import: ${resultsReport.successfulUpserts} success, ${resultsReport.failedRowsInfo.length} pre-DB failures.`, data: { successfulUpserts: resultsReport.successfulUpserts, errorsByRow: resultsReport.failedRowsInfo } }); } return { type: 'success', status: 200, data: { success: true, message: `Successfully imported/updated ${resultsReport.successfulUpserts} partner(s).`, successfulUpserts: resultsReport.successfulUpserts } }; },
+
+       refreshAllApiRevenue: async ({ locals, fetch }) => { // Added `fetch` from event context
+        console.log('[/dashboard refreshAllApiRevenue action] Request received.');
+        if (!locals.admin || !locals.admin.id) {
+            return fail(401, { success: false, message: 'Unauthorized.', action: '?/refreshAllApiRevenue' });
+        }
         const adminId = locals.admin.id;
-        const formData = await request.formData();
-        const partnerId = formData.get('partnerId') as string;
-        const currentStatus = formData.get('currentStatus') as string;
-        if (!partnerId || !currentStatus) { return fail(400, { success: false, message: 'Partner ID and current status are required.' }); }
-        const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
-        const { error: updateError } = await supabase.from('partners').update({ account_status: newStatus, updated_at: new Date().toISOString() }).eq('id', partnerId).eq('admin_id', adminId);
-        if (updateError) { console.error("Toggle status DB error:", updateError); return fail(500, { success: false, message: `Database error updating status: ${updateError.message}` }); }
-        return { type: 'success', status: 200, data: { success: true, message: `Account status updated to ${newStatus}.` }};
-    },
 
-    importPartners: async ({ request, locals }): Promise<ActionResult> => {
-        if (!locals.admin || !locals.admin.id) { return fail(401, { success: false, message: 'Unauthorized for import.' }); }
-        const adminId = locals.admin.id;
-        const formData = await request.formData();
-        const partnersToImportJson = formData.get('partnersToImportJson') as string;
-        if (!partnersToImportJson) { return fail(400, { success: false, message: 'No import data received.' }); }
+        // 1. Get all partners for this admin that have an API key
+        const { data: partnersWithKeys, error: fetchPartnersError } = await supabase
+            .from('partners')
+            .select('id, name, adstera_api_key') // Only need id and key
+            .eq('admin_id', adminId)
+            .not('adstera_api_key', 'is', null) // Key is not null
+            .neq('adstera_api_key', '');        // Key is not an empty string
 
-        let partnersToImport: Array<Record<string, any>>;
-        try {
-            partnersToImport = JSON.parse(partnersToImportJson);
-            if (!Array.isArray(partnersToImport) || partnersToImport.length === 0) { throw new Error("Data not array or empty."); }
-        } catch (e: any) { return fail(400, { success: false, message: `Invalid import data: ${e.message}` }); }
-
-        const resultsReport = { successfulUpserts: 0, failedRowsInfo: [] as { originalIndex?: number, email?: string, error: string }[] };
-        const importedEmails = partnersToImport.map(p => p.email?.toLowerCase()).filter(Boolean) as string[];
-        let existingPartnersMap = new Map<string, PartnerRow>();
-
-        if (importedEmails.length > 0) {
-            const { data: dbPartners, error: fetchErr } = await supabase.from('partners').select('*').eq('admin_id', adminId).in('email', importedEmails);
-            if (fetchErr) { return fail(500, { success: false, message: `DB error preparing import: ${fetchErr.message}`}); }
-            dbPartners?.forEach(p => { if(p.email) existingPartnersMap.set(p.email.toLowerCase(), p); });
+        if (fetchPartnersError) {
+            console.error('[/dashboard refreshAllApiRevenue action] Error fetching partners with API keys:', fetchPartnersError);
+            return fail(500, { success: false, message: 'Database error fetching partners.', action: '?/refreshAllApiRevenue' });
         }
 
-        const upsertOperations: Array<PartnerUpdate | PartnerInsert> = [];
-        for (const importedRow of partnersToImport) {
-            const emailKey = importedRow.email?.toLowerCase();
-            if (!emailKey) { resultsReport.failedRowsInfo.push({ originalIndex: importedRow._originalIndexExcel, email: importedRow.email, error: "Email missing/invalid." }); continue; }
-            const existingPartner = existingPartnersMap.get(emailKey) || null;
-            let shapedData = shapeImportedPartnerDataForDb(importedRow, adminId, existingPartner);
-            if (existingPartner) { (shapedData as PartnerUpdate).id = existingPartner.id; }
-            upsertOperations.push(shapedData as (PartnerUpdate | PartnerInsert));
+        if (!partnersWithKeys || partnersWithKeys.length === 0) {
+            console.log('[/dashboard refreshAllApiRevenue action] No partners with API keys found for this admin.');
+            return { success: true, message: 'No partners found with API keys configured to refresh.', action: '?/refreshAllApiRevenue' };
         }
 
-        if (upsertOperations.length > 0) {
-            const { error: batchError, count } = await supabase.from('partners').upsert(upsertOperations, { onConflict: 'admin_id,email' });
-            if (batchError) {
-                console.error("Supabase batch upsert error for import:", batchError);
-                return fail(500, { success: false, message: `Import DB error: ${batchError.message}.`, data: { errorsByRow: [{ error: batchError.message, email:"Batch Operation" }] } });
+        console.log(`[/dashboard refreshAllApiRevenue action] Found ${partnersWithKeys.length} partners with API keys. Initiating fetches...`);
+
+        // 2. For each partner, trigger the /api/fetch-adsterra-revenue endpoint
+        // These are fire-and-forget. We don't wait for all of them to complete
+        // before returning a response to the client for the initial action.
+        let initiatedCount = 0;
+        partnersWithKeys.forEach(partner => {
+            if (partner.id && partner.adstera_api_key) {
+                initiatedCount++;
+                fetch('/api/fetch-adsterra-revenue', { // SvelteKit server-side fetch to own endpoint
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ partnerId: partner.id })
+                })
+                .then(async (res) => {
+                    if (!res.ok) {
+                        console.error(`Background API fetch for ${partner.name} (ID: ${partner.id}) failed: ${res.status} - ${await res.text()}`);
+                    } else {
+                        console.log(`Background API fetch initiated for ${partner.name} (ID: ${partner.id}) successfully.`);
+                    }
+                })
+                .catch(err => {
+                    console.error(`Error in background API fetch promise for ${partner.name} (ID: ${partner.id}):`, err);
+                });
             }
-            resultsReport.successfulUpserts = count ?? upsertOperations.length;
-        }
+        });
 
-        if (resultsReport.failedRowsInfo.length > 0) {
-            return fail(400, { success: false, message: `Import: ${resultsReport.successfulUpserts} success, ${resultsReport.failedRowsInfo.length} pre-DB failures.`, data: { successfulUpserts: resultsReport.successfulUpserts, errorsByRow: resultsReport.failedRowsInfo } });
-        }
-        
-        return { type: 'success', status: 200, data: { success: true, message: `Successfully imported/updated ${resultsReport.successfulUpserts} partner(s).`, successfulUpserts: resultsReport.successfulUpserts } };
+        // The UI will update gradually as each background fetch completes and `invalidateAll`
+        // (from the dashboard page's general form handler) refreshes the data.
+        return {
+            success: true,
+            message: `API revenue refresh process initiated for ${initiatedCount} partner(s). Table will update as data arrives.`,
+            action: '?/refreshAllApiRevenue'
+        };
     }
 };

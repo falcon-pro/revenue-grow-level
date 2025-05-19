@@ -1,6 +1,7 @@
 <!-- src/routes/(app)/dashboard/+page.svelte (Guarded invalidateAll) -->
 <script lang="ts">
   import type { PageData, ActionData } from './$types';
+  import { enhance, applyAction } from '$app/forms'; // Add enhance and applyAction
   export let data: PageData;
   export let form: ActionData;
 
@@ -31,6 +32,8 @@
 
   // Form Cache for message display logic
   let formCacheKey: string | null = null; // Use a simple key based on action + message to detect actual change
+
+  let isRefreshingAllApis = false; // For button loading state
 
   function displayActionMessage(message: string, success: boolean, duration: number = 5000) {
     actionMessage = message;
@@ -173,6 +176,50 @@
                 <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
                 Import Data
             </button>
+            <!-- src/routes/(app)/dashboard/+page.svelte -->
+<!-- Inside the <div class="flex space-x-2"> for table header buttons -->
+
+<form method="POST" action="?/refreshAllApiRevenue" use:enhance={() => {
+    // Optional: Client-side feedback before server responds
+    isRefreshingAllApis = true;
+    // Can't easily get total count here without another call, so generic message
+    displayActionMessage('Starting API revenue refresh for all relevant accounts...', true, 10000);
+
+    return async ({ result }) => {
+        // This runs after the action completes
+        await applyAction(result); // Standard way to apply action result to page `form` store
+        isRefreshingAllApis = false;
+        // The main page `form` reactive block will display the message from `result.data.message`
+        // and call invalidateAll() if `result.data.success` is true.
+        if (result.type === 'success' && result.data?.success) {
+           // No need to call invalidateAll() here if the generic form handler does it.
+           // Or call it if you want specific timing for this action.
+           // The message will be displayed by the generic form handler.
+           // await invalidateAll();
+        } else if (result.type === 'failure' || result.type === 'error') {
+           // Error message already set by generic form handler
+        }
+    };
+}}>
+    <button
+        type="submit"
+        disabled={isRefreshingAllApis}
+        class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50"
+    >
+        {#if isRefreshingAllApis}
+            <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Refreshing All...
+        {:else}
+            <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+               <path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.324 2.43l-1.131.283a.75.75 0 00-.64 1.008l.066.263a6.973 6.973 0 005.537 3.586A7.002 7.002 0 0018 13.002a7.005 7.005 0 00-1.767-4.667l.262.065a.75.75 0 001.008-.64l.283-1.13a5.5 5.5 0 01-2.474 4.8zM4.94 5.842A6.975 6.975 0 0110.002 2a7.002 7.002 0 016.706 9.015l-.262-.066a.75.75 0 00-1.008.64l-.283 1.131a5.502 5.502 0 013.842-7.988.75.75 0 00-.64-1.007l-1.13.282a5.5 5.5 0 00-9.326-2.43l1.13-.283a.75.75 0 01.64-1.007l-.066-.263zm12.188 1.88L17.39 8.29a.75.75 0 00-1.06-1.061l-.262.262a3.001 3.001 0 00-4.243 0L10 9.293l-1.828-1.83a3.001 3.001 0 00-4.243 0l-.262-.262A.75.75 0 002.608 8.29l.262.568A5.476 5.476 0 002 13.002a5.5 5.5 0 008.576 4.243l.262.262a.75.75 0 001.06 0l.568-.262a5.476 5.476 0 004.152-8.576z" clip-rule="evenodd" />
+            </svg>
+            Refresh All API Keys
+        {/if}
+    </button>
+</form>
         </div>
     </div>
     {#if data.admin} <p class="mb-4 text-sm text-gray-600">Managing for: <strong>{data.admin.id}</strong></p> {/if}
