@@ -46,7 +46,7 @@
     transition:fade={{ duration: 150 }}
   >
     <!-- Backdrop -->
-    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-0.8 transition-opacity" aria-hidden="true"></div>
 
     <!-- Modal Panel -->
     <div class="relative bg-white rounded-lg shadow-xl transform transition-all sm:my-8 w-full {sizeClasses[modalSize]} flex flex-col max-h-[90vh]">
