@@ -12,7 +12,10 @@
   export let sortColumn: SortableColumnKey | null = 'created_at';
   export let sortDirection: 'asc' | 'desc' = 'desc';
 
-  const dispatch = createEventDispatcher();
+  $: console.log('[PartnerTable.svelte] Received props - sortColumn:', sortColumn, 'sortDirection:', sortDirection);
+
+
+  const dispatch = createEventDispatcher<{ requestSort: SortableColumnKey }>(); // Typed dispatch
 
   interface ColumnDefinition {
     key: SortableColumnKey;
@@ -43,10 +46,11 @@
     { key: 'actions', label: 'Actions', sortable: false, classes: 'min-w-[120px] text-right' },
   ];
 
-  function requestSort(columnKey: SortableColumnKey) {
-    if (!columns.find(c => c.key === columnKey)?.sortable) return; // If not marked sortable, do nothing
-    dispatch('requestSort', columnKey);
+ function requestSort(columnKey: SortableColumnKey) { // Make sure columnKey is typed
+    if (!columns.find(c => c.key === columnKey)?.sortable) return;
+    dispatch('requestSort', columnKey); // Dispatch with the key
   }
+  
 </script>
 
 {#if partners.length === 0}
@@ -59,30 +63,29 @@
   <div class="table-wrapper border border-gray-200 rounded-lg shadow-sm overflow-hidden">
     <div class="table-container overflow-x-auto max-h-[calc(100vh-400px)]">
       <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm">
-          <tr>
-            {#each columns as col (col.key)}
-              <th scope="col"
-                  class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap
-                         {col.classes || ''}
-                         {col.thClasses || ''}
-                         {col.sortable ? 'cursor-pointer hover:bg-gray-200 transition-colors' : ''}"
-                  on:click={() => col.sortable && requestSort(col.key)}
-                  title={col.sortable ? `Click to sort by ${col.label}` : col.label}
-                  aria-sort={col.sortable && sortColumn === col.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-              >
-                <div class="flex items-center">
-                  <span>{col.label}</span>
-                  {#if col.sortable && sortColumn === col.key}
-                    <span class="ml-1.5 text-gray-600">
-                      {#if sortDirection === 'asc'}▲{:else}▼{/if}
-                    </span>
-                  {/if}
-                </div>
-              </th>
-            {/each}
-          </tr>
-        </thead>
+      <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm">
+  <tr>
+    {#each columns as col (col.key)}
+      <th
+        scope="col"
+        class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap {col.classes || ''} {col.thClasses || ''} {col.sortable ? 'cursor-pointer hover:bg-gray-200 transition-colors' : ''}"
+        on:click={() => col.sortable && requestSort(col.key)}
+        title={col.sortable ? `Click to sort by ${col.label}` : col.label}
+        aria-sort={col.sortable && sortColumn === col.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <div class="flex items-center">
+          <span>{col.label}</span>
+          <!-- THIS IS THE CRITICAL PART FOR THE INDICATOR -->
+          {#if col.sortable && sortColumn === col.key}
+            <span class="ml-1.5 text-gray-600">
+              {#if sortDirection === 'asc'}▲{:else}▼{/if}
+            </span>
+          {/if}
+        </div>
+      </th>
+    {/each}
+  </tr>
+</thead>
         <tbody class="bg-white divide-y divide-gray-200">
           {#each partners as partner (partner.id)}
             <PartnerTableRow

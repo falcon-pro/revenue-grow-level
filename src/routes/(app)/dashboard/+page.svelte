@@ -92,107 +92,59 @@ $: {
     // Optionally reset sort when filter changes for simpler UX, or maintain sort
     // currentSortColumn = 'created_at'; currentSortDirection = 'desc';
   }
-  function handleSortRequest(event: CustomEvent<SortableColumnKey>) {
+  function handleSortRequest(event: CustomEvent<SortableColumnKey>) { // Make sure event.detail IS SortableColumnKey
     const columnKey = event.detail;
+    console.log('[+page.svelte] handleSortRequest called with columnKey:', columnKey); // ADD THIS LOG
+
     if (currentSortColumn === columnKey) {
         currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
     } else {
         currentSortColumn = columnKey;
-        // Sensible default sort directions
         currentSortDirection = (columnKey === 'name' || columnKey === 'email') ? 'asc' : 'desc';
     }
+    console.log('[+page.svelte] New sort state - Column:', currentSortColumn, 'Direction:', currentSortDirection); // ADD THIS LOG
+    // Svelte's reactivity SHOULD now trigger the $: displayedPartners block to recompute
   }
 
-  // --- Derived `displayedPartners` array ---
-  let displayedPartners: PartnerType[] = [];
+   let displayedPartners: PartnerType[] = [];
+
+  // --- THIS REACTIVE BLOCK PERFORMS THE SORTING ---
   $: if (data.partners) {
+      console.log('[+page.svelte] Recalculating displayedPartners. Sort Column:', currentSortColumn, 'Direction:', currentSortDirection, 'Filter:', activeFilter, 'Search:', searchTerm); // ADD THIS LOG
       let filtered = [...data.partners];
 
-      // 1. Search Filter
-      if (searchTerm.trim() !== '') {
-          const lowerSearchTerm = searchTerm.toLowerCase().trim();
-          filtered = filtered.filter(partner =>
-              Object.values(partner).some(value =>
-                  value !== null && String(value).toLowerCase().includes(lowerSearchTerm)
-              )
-          );
-      }
+      if (searchTerm.trim() !== '') { /* ... search ... */ const lowerSearchTerm = searchTerm.toLowerCase().trim(); filtered = filtered.filter(partner => Object.values(partner).some(value => value !== null && String(value).toLowerCase().includes(lowerSearchTerm))); }
+      if (activeFilter === 'active' || activeFilter === 'suspended') { /* ... filter ... */ filtered = filtered.filter(p => p.account_status === activeFilter); }
 
-      // 2. Status Filter
-      if (activeFilter === 'active' || activeFilter === 'suspended') {
-          filtered = filtered.filter(p => p.account_status === activeFilter);
-      }
-      // Note: 'recent' filter not implemented here, would require date logic
-
-      // 3. Sorting Logic
       if (currentSortColumn) {
           filtered.sort((a, b) => {
               let valA: any;
               let valB: any;
-
+              // ... (your existing switch/case for valA, valB for special columns like effectiveRevenue) ...
               switch (currentSortColumn) {
-                  case 'effectiveRevenue':
-                      valA = getEffectiveRevenue(a).totalUSD;
-                      valB = getEffectiveRevenue(b).totalUSD;
-                      break;
-                  case 'revenuePeriodRange':
-                      // Simple sort: by latest known revenue period. More complex could be latest date.
-                      const getLatestPeriodTimestamp = (p: PartnerType) => {
-                          const monthly = (p.monthly_revenue || {}) as Record<string, any>;
-                          const periods = Object.keys(monthly);
-                          if (periods.length === 0) return 0; // No periods, sort last
-                          periods.sort().reverse(); // Sort to get latest (e.g. '2023-11' > '2023-10')
-                          try { return new Date(periods[0]).getTime(); } catch { return 0; }
-                      };
-                      valA = getLatestPeriodTimestamp(a);
-                      valB = getLatestPeriodTimestamp(b);
-                      break;
-                  case 'latestPayStatus':
-                        const getLatestStatusOrder = (p: PartnerType) => {
-                            const monthly = (p.monthly_revenue || {}) as Record<string, any>;
-                            const periods = Object.keys(monthly).sort();
-                            if (periods.length === 0) return 3; // N/A last
-                            const status = monthly[periods[periods.length-1]]?.status || 'pending';
-                            if (status === 'received') return 0;
-                            if (status === 'pending') return 1;
-                            if (status === 'not_received') return 2;
-                            return 3;
-                        };
-                        valA = getLatestStatusOrder(a);
-                        valB = getLatestStatusOrder(b);
-                        break;
-                  default:
-                      valA = (a as any)[currentSortColumn];
-                      valB = (b as any)[currentSortColumn];
+                  case 'effectiveRevenue': valA = getEffectiveRevenue(a).totalUSD; valB = getEffectiveRevenue(b).totalUSD; break;
+                  case 'revenuePeriodRange': const getLatestPeriodTimestamp = (p: PartnerType) => { const monthly = (p.monthly_revenue || {}) as Record<string, any>; const periods = Object.keys(monthly); if (periods.length === 0) return 0; periods.sort().reverse(); try { return new Date(periods[0]).getTime(); } catch { return 0; }}; valA = getLatestPeriodTimestamp(a); valB = getLatestPeriodTimestamp(b); break;
+                  case 'latestPayStatus': const getLatestStatusOrder = (p: PartnerType) => { const monthly = (p.monthly_revenue || {}) as Record<string, any>; const periods = Object.keys(monthly).sort(); if (periods.length === 0) return 3; const status = monthly[periods[periods.length-1]]?.status || 'pending'; if (status === 'received') return 0; if (status === 'pending') return 1; if (status === 'not_received') return 2; return 3; }; valA = getLatestStatusOrder(a); valB = getLatestStatusOrder(b); break;
+                  default: valA = (a as any)[currentSortColumn]; valB = (b as any)[currentSortColumn];
               }
 
-              // Type-aware comparison logic (simplified)
-              if (typeof valA === 'string' && typeof valB === 'string') {
-                  valA = valA.toLowerCase();
-                  valB = valB.toLowerCase();
-              } else if (typeof valA === 'number' && typeof valB === 'number') {
-                  // standard numeric sort
-              } else if (valA && typeof valA === 'string' && valB && typeof valB === 'string') {
-                  // Attempt to compare as dates if they look like ISO strings
-                  const dateA = new Date(valA).getTime();
-                  const dateB = new Date(valB).getTime();
-                  if (!isNaN(dateA) && !isNaN(dateB)) {
-                      valA = dateA; valB = dateB;
-                  }
-              }
-
+              // Type-aware comparison
               if (valA === null || valA === undefined) return currentSortDirection === 'asc' ? 1 : -1;
               if (valB === null || valB === undefined) return currentSortDirection === 'asc' ? -1 : 1;
-
+              if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); }
+              else if (valA && typeof valA === 'string' && valB && typeof valB === 'string' && !isNaN(new Date(valA).getTime()) && !isNaN(new Date(valB).getTime())) { valA = new Date(valA).getTime(); valB = new Date(valB).getTime(); } // Check if strings are dates
+              
               if (valA < valB) return currentSortDirection === 'asc' ? -1 : 1;
               if (valA > valB) return currentSortDirection === 'asc' ? 1 : -1;
               return 0;
           });
       }
       displayedPartners = filtered;
+      console.log('[+page.svelte] displayedPartners updated. First item name (if any):', displayedPartners[0]?.name); // ADD THIS LOG
   } else {
       displayedPartners = [];
   }
+  
 </script>
 
 <div class="space-y-8 p-4 md:p-6 lg:p-8">
@@ -262,7 +214,7 @@ $: {
         partners={displayedPartners}
         sortColumn={currentSortColumn}
         sortDirection={currentSortDirection}
-        on:requestSort={(e) => handleSortRequest(e.detail as SortableColumnKey)}
+        on:requestSort={handleSortRequest} 
         on:requestDelete={(e)=>openDeleteModal(e.detail as PartnerType)}
         on:requestEdit={(e)=>openEditModal(e.detail as PartnerType)}
         on:requestToggleStatus={(e)=>handleTogglePartnerStatus(e.detail as PartnerType)}
