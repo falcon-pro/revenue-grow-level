@@ -43,9 +43,9 @@
           {#each partners as partner (partner.id)}
             <PartnerTableRow
               {partner}
-              on:requestDelete={(event) => dispatch('requestDelete', event.detail)}
+               on:requestDelete={(event) => dispatch('requestDelete', event.detail)}
               on:requestEdit={(event) => dispatch('requestEdit', event.detail)}
-              on:requestToggleStatus={(event) => dispatch('requestToggleStatus', event.detail)}
+              on:requestToggleStatus={(event) => dispatch('requestToggleStatus', event.detail)} 
             />
           {/each}
         </tbody>
