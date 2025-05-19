@@ -14,12 +14,14 @@
   import EditPartnerModal from '$lib/components/Modals/EditPartnerModal.svelte';
   import ImportModal from '$lib/components/Modals/ImportModal/ImportModal.svelte';
 
+
   // Types
   import type { Database } from '../../../types/supabase'; // Adjust path if needed
   type PartnerType = Database['public']['Tables']['partners']['Row'];
   // For special sort keys - update this based on columns defined in PartnerTable.svelte
   type SortableColumnKey = keyof PartnerType | 'effectiveRevenue' | 'revenuePeriodRange' | 'latestPayStatus' ;
 
+  import { formatDateForExcel, formatRevenueForExcel, getRevenuePeriodRangeForExcel } from '$lib/utils/exportHelpers'; // NEW helper import
 
   // SvelteKit Utilities
   import { deserialize, enhance, applyAction } from '$app/forms';
@@ -27,6 +29,7 @@
   import { browser } from '$app/environment';
   import { getEffectiveRevenue } from '$lib/utils/revenue'; // For sorting
   import { getMonthName } from '$lib/utils/helpers'; // For revenue period range helper if used in sort
+    import * as XLSX from 'xlsx'; // <<< --- ADD THIS IMPORT FOR EXCEL EXPORT ---
 
   // --- Component State ---
   let showDeleteModal = false;
@@ -144,7 +147,101 @@ $: {
   } else {
       displayedPartners = [];
   }
-  
+
+
+ function exportDisplayedToExcel() {
+    if (!displayedPartners || displayedPartners.length === 0) {
+      displayActionMessage('No data displayed to export.', false); // Use your displayActionMessage
+      return;
+    }
+
+    console.log("Exporting partners:", displayedPartners.length);
+
+    // Adapt your original data mapping for export
+    const exportData = displayedPartners.map(partner => {
+      const effectiveRev = getEffectiveRevenue(partner); // You already have this helper
+      
+      // Recreate simplified status based on PartnerTable display
+      let latestPayStatusDisplay = 'N/A';
+      const monthlyData = (partner.monthly_revenue || {}) as Record<string, any>;
+      const allPeriods = Object.keys(monthlyData).sort();
+      if (allPeriods.length > 0) {
+          const latestPeriodKeyOverall = allPeriods[allPeriods.length - 1];
+          const status = monthlyData[latestPeriodKeyOverall]?.status || 'pending';
+          if(status === 'received') latestPayStatusDisplay = 'Received';
+          else if(status === 'not_received') latestPayStatusDisplay = 'Not Received';
+          else latestPayStatusDisplay = 'Pending';
+      }
+
+
+      return {
+        'Partner Name': partner.name || '',
+        'Mobile': partner.mobile || '',
+        'Email': partner.email || '',
+        'Address': partner.address || '',
+        'Webmoney ID': partner.webmoney || '',
+        'Multi Account No': partner.multi_account_no || '',
+        'Adsterra Link': partner.adstera_link || '',
+        'Adsterra Email Link': partner.adstera_email_link || '',
+        'Adsterra API Key': partner.adstera_api_key || '',
+        'Record Added On': formatDateForExcel(partner.created_at),
+        'Account Start Date': formatDateForExcel(partner.account_start),
+        'Revenue Period Range': getRevenuePeriodRangeForExcel(partner.monthly_revenue),
+        'Displayed Revenue Source': effectiveRev.sourceForDisplay?.replace('_', ' ').toUpperCase() || 'N/A',
+        'Displayed Total (USD)': formatRevenueForExcel(effectiveRev.totalUSD),
+        'Sum of Manual Entries (USD)': formatRevenueForExcel(effectiveRev.manualSumUSD),
+        'Last Known API Revenue (USD)': formatRevenueForExcel(partner.api_revenue_usd),
+        'Last API Check': formatDateForExcel(partner.last_api_check),
+        'Latest Period Pay Status': latestPayStatusDisplay,
+        'Account Status': partner.account_status ? partner.account_status.toUpperCase() : 'N/A'
+      };
+    });
+
+    try {
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // Optional: Define column widths (example, adjust as needed)
+      ws['!cols'] = [
+        { wch: 25 }, { wch: 15 }, { wch: 30 }, { wch: 35 }, { wch: 18 }, 
+        { wch: 18 }, { wch: 30 }, { wch: 30 }, { wch: 35 }, { wch: 20 },
+        { wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 22 }, { wch: 25 },
+        { wch: 25 }, { wch: 20 }, { wch: 20 }, { wch: 15 } 
+      ];
+
+      // Optional: Format specific columns as numbers/currency
+      // Find indices of USD columns based on the header order in exportData mapping
+      const headers = Object.keys(exportData[0] || {});
+      const usdColIndices: number[] = [];
+      const targetUsdHeaders = ['Displayed Total (USD)', 'Sum of Manual Entries (USD)', 'Last Known API Revenue (USD)'];
+      headers.forEach((h, i) => {
+          if (targetUsdHeaders.includes(h)) usdColIndices.push(i);
+      });
+      
+      const sheetDataForFormatting = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
+      for (let R = 1; R < sheetDataForFormatting.length; ++R) { // Start from row 1 (data)
+          usdColIndices.forEach(C => {
+              const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+              if (ws[cellRef] && typeof ws[cellRef].v === 'number') {
+                  ws[cellRef].t = 'n'; // Type: Number
+                  ws[cellRef].z = '$#,##0.00'; // Format: Currency USD
+              }
+          });
+      }
+
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "PartnerRevenueData"); // Sheet name
+
+      const todayStr = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Partner_Dashboard_Export_${todayStr}.xlsx`);
+
+      displayActionMessage('Data exported successfully!', true);
+    } catch (e: any) {
+      console.error("Error exporting to Excel:", e);
+      displayActionMessage(`Export failed: ${e.message}`, false);
+    }
+  }
+
 </script>
 
 <div class="space-y-8 p-4 md:p-6 lg:p-8">
@@ -189,10 +286,18 @@ $: {
                     {#if isRefreshingAllApis} <svg class="animate-spin -ml-0.5 sm:-ml-1 mr-1 sm:mr-2 h-4 sm:h-5 w-4 sm:w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Refreshing... {:else} <svg class="-ml-0.5 sm:-ml-1 mr-1 sm:mr-2 h-4 sm:h-5 w-4 sm:w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.324 2.43l-1.131.283a.75.75 0 00-.64 1.008l.066.263a6.973 6.973 0 005.537 3.586A7.002 7.002 0 0018 13.002a7.005 7.005 0 00-1.767-4.667l.262.065a.75.75 0 001.008-.64l.283-1.13a5.5 5.5 0 01-2.474 4.8zM4.94 5.842A6.975 6.975 0 0110.002 2a7.002 7.002 0 016.706 9.015l-.262-.066a.75.75 0 00-1.008.64l-.283 1.131a5.502 5.502 0 013.842-7.988.75.75 0 00-.64-1.007l-1.13.282a5.5 5.5 0 00-9.326-2.43l1.13-.283a.75.75 0 01.64-1.007l-.066-.263zm12.188 1.88L17.39 8.29a.75.75 0 00-1.06-1.061l-.262.262a3.001 3.001 0 00-4.243 0L10 9.293l-1.828-1.83a3.001 3.001 0 00-4.243 0l-.262-.262A.75.75 0 002.608 8.29l.262.568A5.476 5.476 0 002 13.002a5.5 5.5 0 008.576 4.243l.262.262a.75.75 0 001.06 0l.568-.262a5.476 5.476 0 004.152-8.576z" clip-rule="evenodd" /></svg> Refresh APIs {/if}
                 </button>
             </form>
-             <!-- Placeholder for Export Button -->
-            <button type="button" class="btn-secondary inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border text-xs sm:text-sm rounded-md disabled:opacity-50" disabled title="Export to be implemented">
-                Export Data
-            </button>
+            <button
+    type="button"
+    on:click={exportDisplayedToExcel} 
+    class="btn-success inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent shadow-sm text-xs sm:text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+>
+    <svg class="-ml-0.5 sm:-ml-1 mr-1 sm:mr-2 h-4 sm:h-5 w-4 sm:w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" /> <!-- Using a generic export/download like icon for now -->
+         <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm.707-6.707l2.293-2.293a1 1 0 00-1.414-1.414L11 8.586V5a1 1 0 00-2 0v3.586L7.414 6.293a1 1 0 00-1.414 1.414l2.293 2.293a.997.997 0 001.414 0zM7 14h6a1 1 0 000-2H7a1 1 0 000 2z"/> Placeholder download icon -->
+    </svg>
+    Export Displayed
+</button>
+
         </div>
     </div>
 
