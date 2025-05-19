@@ -1,35 +1,37 @@
-<!-- src/routes/access-pin/+page.svelte (Corrected) -->
 <script lang="ts">
   import PinAccessForm from '$lib/components/Auth/PinAccessForm.svelte';
   import type { PageData, ActionData } from './$types';
-  // import { page } from '$app/stores'; // No longer need $page store here for formAction
-
+  
   export let data: PageData;
   export let form: ActionData;
-
-  // The formActionPath in PinAccessForm.svelte defaults to "?/verifyPin", which is what we want.
-  // We don't need to pass it explicitly if using the default.
-  // If you WERE passing it:
-  // const formAction = '?/verifyPin'; // Simple, no query params here
 </script>
 
-<div class="min-h-screen flex flex-col items-center justify-center bg-gray-200 p-4">
-  <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
-    <div class="text-center mb-8">
-      <svg class="mx-auto h-12 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-      </svg>
-      <h1 class="mt-4 text-2xl font-bold text-center text-gray-900">Admin Portal Access</h1>
-      <p class="mt-1 text-sm text-center text-gray-600">Enter your secure PIN to proceed.</p>
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-gray-50 p-4">
+  <div class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+    <div class="p-8">
+      <div class="text-center mb-10">
+        <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
+          <svg class="h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-2">Secure Access</h1>
+        <p class="text-gray-600">Enter your 6-digit verification code</p>
+      </div>
+
+      <PinAccessForm errorMessage={form?.error} />
+
+      {#if form?.message}
+        <div class="mt-6 p-3 bg-green-50 rounded-lg text-green-700 text-sm text-center">
+          {form.message}
+        </div>
+      {/if}
     </div>
-
-    <PinAccessForm errorMessage={form?.error} />
-    <!-- PinAccessForm will use its default formActionPath="?/verifyPin" -->
-    <!-- Or, if you want to be explicit: <PinAccessForm errorMessage={form?.error} formActionPath={"?/verifyPin"} /> -->
-
-
-    {#if form?.message}
-      <p class="mt-4 text-sm text-green-600">{form.message}</p>
-    {/if}
+    
+    <div class="bg-gray-50 px-8 py-6 border-t border-gray-200">
+      <p class="text-xs text-gray-500 text-center">
+        Can't access your code? <a href="#" class="font-medium text-blue-600 hover:text-blue-500">Request a new one</a>
+      </p>
+    </div>
   </div>
 </div>
