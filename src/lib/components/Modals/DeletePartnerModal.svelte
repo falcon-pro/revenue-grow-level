@@ -20,23 +20,31 @@
     dispatch('close');
   }
 
-  const handleSubmit: SubmitFunction = () => {
+const handleSubmit: SubmitFunction = () => {
     isLoading = true;
     return async ({ result, update }) => {
-      // `result` contains the data returned by the server 'deletePartner' action
-      // `update` is a function to force SvelteKit to re-run load functions
-      if (result.type === 'success' || result.type === 'failure') {
-          // If using invalidate to refresh list, do it here
-          // await update({ reset: false, invalidateAll: false }); // Or specific invalidation
-          // For now, just handling isLoading and closing
-      }
       isLoading = false;
-      if (result.type === 'success') {
-          close(); // Close modal on successful deletion
+      // result is the ActionResult from the server
+      // (e.g. { type: 'success', status: 200, data: { success: true, message: '...' }})
+      // or { type: 'failure', status: 400, data: { success: false, message: '...' }})
+
+      // Let SvelteKit update the page's `form` store first.
+      // This is important if the page uses `form` to display errors.
+      await update(); // This ensures the main page's `form` prop is updated
+
+      // Now that the page's `form` store is updated, we can dispatch 'close'.
+      // The page's `closeDeleteModal` function will then read the fresh `form` prop.
+      if (result.type === 'success' && (result.data as any)?.success) {
+          dispatch('close'); // Triggers parent's closeDeleteModal, which will show toast
+      } else if (result.type === 'failure' || (result.type === 'success' && !(result.data as any)?.success)) {
+          // If there was a failure, show error toast here OR let page handle it.
+          // For consistency, let the page's `closeDeleteModal` handle it from `form` prop.
+          // Or if you want modal-specific errors shown differently:
+          const errorMsg = (result.data as any)?.message || 'Deletion failed inside modal.';
+          toast.error(errorMsg);
+          // Optionally dispatch 'close' even on failure if modal should always close
+          // dispatch('close');
       }
-      // Error messages from `fail` will be handled by the page's `form` prop for delete actions
-      // We might need a dedicated place for delete action messages if not using `form` for that.
-      await update(); // Call update to apply form action result to the page's `form` store
     };
   };
 

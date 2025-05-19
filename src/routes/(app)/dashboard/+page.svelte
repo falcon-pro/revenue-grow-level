@@ -38,79 +38,72 @@
   let partnerToEdit: PartnerType | null = null;
   let showImportModal = false;
   let isRefreshingAllApis = false;
-  let formCacheKey: string | null = null; // For comparing form prop to avoid re-processing messages
+  let formCacheKey: string | null = null;
 
-  // --- State for Table Controls & Sorting (RENAMED) ---
-  let searchTerm: string = '';
-  let activeFilter: 'all' | 'recent' | 'active' | 'suspended' = 'all';
-  let pageSortColumn: SortableColumnKey = 'created_at'; // RENAMED
-  let pageSortDirection: 'asc' | 'desc' = 'desc';      // RENAMED
+  // --- State for Table Controls & Sorting ---
+  let searchTerm: string = ''; // Parent's source of truth
+  let activeFilter: 'all' | 'recent' | 'active' | 'suspended' = 'all'; // Parent's source of truth
+  let pageSortColumn: SortableColumnKey = 'created_at'; // Renamed from currentSortColumn
+  let pageSortDirection: 'asc' | 'desc' = 'desc';      // Renamed from currentSortDirection
 
-  // --- Modal Control & Action Handlers (Using toast) ---
+  // --- Modal Control & Action Handlers (Toast integration) ---
   function openImportModal() { showImportModal = true; }
-  async function closeImportModal() { showImportModal = false; /* ... existing form check for import ... */ if (form?.action === '?/importPartners' && form?.success && browser) { if (browser) await invalidateAll(); }}
+  async function closeImportModal() { showImportModal = false; if (form?.action === '?/importPartners' && form?.success && browser) { if (browser) await invalidateAll(); } }
   async function onImportSuccess(event: CustomEvent<{message?: string, count?: number}>) { toast.success(event.detail.message || `Import successful, ${event.detail.count || 'some'} records.`, 7000); if (browser) await invalidateAll(); }
   function openDeleteModal(partner: PartnerType) { partnerToDelete = partner; showDeleteModal = true; }
-  async function closeDeleteModal() { const wasSuccess = form?.action === '?/deletePartner' && form?.success === true; const msg = form?.message; showDeleteModal = false; partnerToDelete = null; if (wasSuccess) { toast.success(msg || 'Partner deleted.'); if (browser) await invalidateAll(); } else if (form?.action === '?/deletePartner' && !form?.success) { toast.error(msg || 'Failed to delete.'); }}
+async function closeDeleteModal() {
+    const wasSuccess = form?.action === '?/deletePartner' && form?.success === true;
+    const wasFailureWithMsg = form?.action === '?/deletePartner' && form?.success === false && form?.message;
+    const msg = form?.message;
+
+    showDeleteModal = false;
+    partnerToDelete = null;
+
+    if (wasSuccess) {
+        toast.success(msg || 'Partner deleted successfully.'); // Using toast
+        if (browser) await invalidateAll();
+    } else if (wasFailureWithMsg) { // Explicitly check if success is false AND there's a message
+        toast.error(msg || 'Failed to delete partner.'); // Using toast
+    } else if (form?.action === '?/deletePartner' && !form?.success) {
+        // Fallback if success is not explicitly false but not true either (e.g. only error object from fail)
+        toast.error(msg || 'An error occurred while deleting the partner.');
+    }
+    // Note: if form.action wasn't '?/deletePartner', no toast is shown here by this function,
+    // which is correct as this function is only about closing the *delete* modal.
+    // The generic $: {form...} block handles messages for actions that don't have modals (like Add).
+}
+
   function openEditModal(partner: PartnerType) { partnerToEdit = { ...partner }; showEditModal = true; }
   async function closeEditModal() { const wasSuccess = form?.action?.startsWith('?/editPartner') && form?.success === true; const msg = form?.message; showEditModal = false; partnerToEdit = null; if (wasSuccess) { toast.success(msg || 'Partner updated.'); if (browser) await invalidateAll(); } else if (form?.action?.startsWith('?/editPartner') && !form?.success) { toast.error(msg || 'Failed to update.'); }}
   async function handleTogglePartnerStatus(partnerToToggle: PartnerType) { if (!partnerToToggle || !partnerToToggle.id) return; const partnerIndex = data.partners.findIndex(p => p.id === partnerToToggle.id); if (partnerIndex === -1) { toast.error("Error: Partner not found."); return; } const originalStatus = data.partners[partnerIndex].account_status; const newStatus = originalStatus === 'active' ? 'suspended' : 'active'; data.partners = data.partners.map((p, i) => i === partnerIndex ? { ...p, account_status: newStatus } : p); const formData = new FormData(); formData.append('partnerId', partnerToToggle.id); formData.append('currentStatus', originalStatus || 'active'); try { const response = await fetch('?/toggleAccountStatus', { method: 'POST', body: formData }); const result = deserialize(await response.text()); if (result.type === 'success' && result.data?.data?.success === true) { toast.success(result.data.data.message || 'Status updated!'); if (browser) await invalidateAll(); } else { throw new Error(result.data?.data?.message || result.data?.message || result.error?.message || 'Failed to update status.');} } catch (err: any) { toast.error(err.message || 'Error updating status.'); data.partners = data.partners.map((p, i) => i === partnerIndex ? { ...p, account_status: originalStatus } : p);}}
 
-  // --- Reactive Handling for `form` prop (toast integration) ---
+  // --- Reactive Handling for `form` prop updates (from Add/Edit/RefreshAll forms) ---
   $: { const currentFormStateSignature = form ? `${form.action}-${form.message}-${form.success}-${JSON.stringify(form.errors)}` : null; if (browser && form && form.message && currentFormStateSignature !== formCacheKey) { if (form.action === '?/addPartner' || form.action?.startsWith('?/editPartner') || form.action === '?/refreshAllApiRevenue') { if (form.success === true) { toast.success(form.message); if (form.action === '?/addPartner' || form.action === '?/refreshAllApiRevenue') { if (browser) invalidateAll(); }} else if (form.success === false) { toast.error(form.message || 'Action failed.'); }} formCacheKey = currentFormStateSignature; } else if (browser && form === undefined && formCacheKey !== null) { formCacheKey = null; }}
 
-  // --- Event Handlers for TableControls (Using RENAMED sort state) ---
+  // --- Event Handlers for TableControls ---
   function handleSearchUpdate(event: CustomEvent<string>) {
-    searchTerm = event.detail;
+    searchTerm = event.detail; // Update parent's state based on child's event
   }
   function handleFilterUpdate(event: CustomEvent<typeof activeFilter>) {
-    activeFilter = event.detail;
+    activeFilter = event.detail; // Update parent's state based on child's event
   }
   function handleSortRequest(event: CustomEvent<SortableColumnKey>) {
     const columnKey = event.detail;
-    console.log('[+page.svelte] handleSortRequest called with columnKey:', columnKey);
-    if (pageSortColumn === columnKey) { // Use RENAMED state
-        pageSortDirection = pageSortDirection === 'asc' ? 'desc' : 'asc'; // Use RENAMED state
+    if (pageSortColumn === columnKey) {
+        pageSortDirection = pageSortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-        pageSortColumn = columnKey; // Use RENAMED state
-        pageSortDirection = (columnKey === 'name' || columnKey === 'email') ? 'asc' : 'desc'; // Use RENAMED state
+        pageSortColumn = columnKey;
+        pageSortDirection = (columnKey === 'name' || columnKey === 'email') ? 'asc' : 'desc';
     }
-    console.log('[+page.svelte] New sort state - Column:', pageSortColumn, 'Direction:', pageSortDirection);
   }
 
-  // --- Derived `displayedPartners` array (Using RENAMED sort state) ---
+  // --- Derived `displayedPartners` array (Using renamed sort state) ---
   let displayedPartners: PartnerType[] = [];
-  $: if (data.partners) {
-      console.log('[+page.svelte] Recalculating displayedPartners. Sort Column:', pageSortColumn, 'Direction:', pageSortDirection, 'Filter:', activeFilter, 'Search:', searchTerm); // Use RENAMED
-      let filtered = [...data.partners];
-      if (searchTerm.trim() !== '') { const lowerSearchTerm = searchTerm.toLowerCase().trim(); filtered = filtered.filter(partner => Object.values(partner).some(value => value !== null && String(value).toLowerCase().includes(lowerSearchTerm))); }
-      if (activeFilter === 'active' || activeFilter === 'suspended') { filtered = filtered.filter(p => p.account_status === activeFilter); }
-
-      if (pageSortColumn) { // Use RENAMED state
-          filtered.sort((a, b) => {
-              let valA: any; let valB: any;
-              switch (pageSortColumn) { // Use RENAMED state
-                  case 'effectiveRevenue': valA = getEffectiveRevenue(a).totalUSD; valB = getEffectiveRevenue(b).totalUSD; break;
-                  case 'revenuePeriodRange': const getLPT = (p: PartnerType) => { const m = (p.monthly_revenue || {}) as Record<string,any>; const ks=Object.keys(m); if(ks.length===0) return 0; ks.sort().reverse(); try {return new Date(ks[0]).getTime();} catch{return 0;}}; valA = getLPT(a); valB = getLPT(b); break;
-                  case 'latestPayStatus': const getLSO = (p: PartnerType) => { const m=(p.monthly_revenue||{}) as Record<string,any>; const ks=Object.keys(m).sort(); if(ks.length===0) return 3; const s=m[ks[ks.length-1]]?.status||'pending'; if(s==='received')return 0; if(s==='pending')return 1; return 2;}; valA = getLSO(a); valB = getLSO(b); break;
-                  default: valA = (a as any)[pageSortColumn]; valB = (b as any)[pageSortColumn]; // Use RENAMED state
-              }
-              if (valA === null || valA === undefined) return pageSortDirection === 'asc' ? 1 : -1; // Use RENAMED state
-              if (valB === null || valB === undefined) return pageSortDirection === 'asc' ? -1 : 1; // Use RENAMED state
-              if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); const dA=new Date(valA).getTime(); const dB=new Date(valB).getTime(); if(!isNaN(dA) && !isNaN(dB) && valA.includes('-')){valA=dA; valB=dB;}}
-              if (valA < valB) return pageSortDirection === 'asc' ? -1 : 1; // Use RENAMED state
-              if (valA > valB) return pageSortDirection === 'asc' ? 1 : -1; // Use RENAMED state
-              return 0;
-          });
-      }
-      displayedPartners = filtered;
-  } else {
-      displayedPartners = [];
-  }
+  $: if (data.partners) { let filtered = [...data.partners]; if (searchTerm.trim() !== '') { const lowerSearchTerm = searchTerm.toLowerCase().trim(); filtered = filtered.filter(partner => Object.values(partner).some(value => value !== null && String(value).toLowerCase().includes(lowerSearchTerm))); } if (activeFilter === 'active' || activeFilter === 'suspended') { filtered = filtered.filter(p => p.account_status === activeFilter); } if (pageSortColumn) { filtered.sort((a, b) => { let valA: any; let valB: any; switch (pageSortColumn) { case 'effectiveRevenue': valA = getEffectiveRevenue(a).totalUSD; valB = getEffectiveRevenue(b).totalUSD; break; case 'revenuePeriodRange': const getLPT = (p: PartnerType) => { const m = (p.monthly_revenue || {}) as Record<string,any>; const ks=Object.keys(m); if(ks.length===0) return 0; ks.sort().reverse(); try {return new Date(ks[0]).getTime();} catch{return 0;}}; valA = getLPT(a); valB = getLPT(b); break; case 'latestPayStatus': const getLSO = (p: PartnerType) => { const m=(p.monthly_revenue||{}) as Record<string,any>; const ks=Object.keys(m).sort(); if(ks.length===0) return 3; const s=m[ks[ks.length-1]]?.status||'pending'; if(s==='received')return 0; if(s==='pending')return 1; return 2;}; valA = getLSO(a); valB = getLSO(b); break; default: valA = (a as any)[pageSortColumn]; valB = (b as any)[pageSortColumn]; } if (valA === null || valA === undefined) return pageSortDirection === 'asc' ? 1 : -1; if (valB === null || valB === undefined) return pageSortDirection === 'asc' ? -1 : 1; if (typeof valA === 'string' && typeof valB === 'string') { valA = valA.toLowerCase(); valB = valB.toLowerCase(); const dA=new Date(valA).getTime(); const dB=new Date(valB).getTime(); if(!isNaN(dA) && !isNaN(dB) && valA.includes('-')){valA=dA; valB=dB;}} if (valA < valB) return pageSortDirection === 'asc' ? -1 : 1; if (valA > valB) return pageSortDirection === 'asc' ? 1 : -1; return 0; }); } displayedPartners = filtered; } else { displayedPartners = []; }
 
   function exportDisplayedToExcel() {
     if (!displayedPartners || displayedPartners.length === 0) {
-      displayActionMessage('No data displayed to export.', false); // Use your displayActionMessage
+        toast.warning('No data displayed to export.'); // Using toast.warning
       return;
     }
 
@@ -194,10 +187,10 @@
       const todayStr = new Date().toISOString().slice(0, 10);
       XLSX.writeFile(wb, `Partner_Dashboard_Export_${todayStr}.xlsx`);
 
-      displayActionMessage('Data exported successfully!', true);
+        toast.success('Data exported successfully!'); // <<< --- CORRECTED TO USE TOAST ---
     } catch (e: any) {
       console.error("Error exporting to Excel:", e);
-      displayActionMessage(`Export failed: ${e.message}`, false);
+        toast.error(`Export failed: ${e.message}`); // <<< --- CORRECTED TO USE TOAST ---
     }
   }
 </script>
@@ -215,21 +208,20 @@
     <h2 class="text-xl md:text-2xl font-semibold text-gray-800 mb-4">Add New Partner / Revenue</h2>
     <PartnerForm formAction="?/addPartner" submitButtonText="Add Partner Entry" serverErrors={form?.action === '?/addPartner' ? form : null}/>
   </div>
-
   <hr class="my-8 border-gray-300" />
 
   <!-- Partner Records Section -->
   <div>
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
         <h2 class="text-xl md:text-2xl font-semibold text-gray-800 whitespace-nowrap">Partner Records</h2>
-       <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-2">
             <button type="button" on:click={openImportModal} class="btn-primary inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent shadow-sm text-xs sm:text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                 <svg class="-ml-0.5 sm:-ml-1 mr-1 sm:mr-2 h-4 sm:h-5 w-4 sm:w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
                 Import
             </button>
             <form method="POST" action="?/refreshAllApiRevenue" use:enhance={() => {
                 isRefreshingAllApis = true;
-                displayActionMessage('Starting API revenue refresh for all accounts...', true, 10000);
+                toast.info('Starting API revenue refresh for all accounts. This may take a few moments.', 7000);
                 return async ({ result }) => { await applyAction(result); isRefreshingAllApis = false; };
             }}>
                 <button type="submit" disabled={isRefreshingAllApis} class="btn-warning inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent shadow-sm text-xs sm:text-sm font-medium rounded-md text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50">
@@ -246,20 +238,19 @@
          <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm.707-6.707l2.293-2.293a1 1 0 00-1.414-1.414L11 8.586V5a1 1 0 00-2 0v3.586L7.414 6.293a1 1 0 00-1.414 1.414l2.293 2.293a.997.997 0 001.414 0zM7 14h6a1 1 0 000-2H7a1 1 0 000 2z"/> Placeholder download icon -->
     </svg>
     Export Displayed
-</button>
-
-        </div>
+</button> 
+      </div>
     </div>
 
-    <!-- TableControls passes data one-way and listens for events -->
+    <!-- TableControls: Pass props one-way, listen for events -->
     <TableControls
       searchTerm={searchTerm}
       currentFilter={activeFilter}
-      on:searchChange={handleSearchUpdate}  
+      on:searchChange={handleSearchUpdate} 
       on:filterChange={handleFilterUpdate}
     />
 
-    {#if data.admin} <p class="mt-2 mb-4 text-sm text-gray-600">Managing for: <strong>{data.admin.id}</strong></p> {/if}
+ {#if data.admin} <p class="mt-2 mb-4 text-sm text-gray-600">Managing for: <strong>{data.admin.id}</strong></p> {/if}
 
     {#if data.partners === undefined || data.partners === null }
       <TableSkeleton rows={5} columns={16}/> <p>Loading partners...</p>
