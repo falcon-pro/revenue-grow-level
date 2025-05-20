@@ -1,7 +1,7 @@
 <!-- src/lib/components/Dashboard/Summary/SummaryCard.svelte -->
 <script lang="ts">
-  export let label: string;
-  export let value: string | number;
+  export let label: string = 'Label';
+  export let value: string | number = '-'; // Default value is '-'
   export let description: string = '';
   export let trend: 'up' | 'down' | 'neutral' = 'neutral';
   export let loading: boolean = false;
