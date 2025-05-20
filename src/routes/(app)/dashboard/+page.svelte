@@ -201,13 +201,10 @@ async function closeDeleteModal() {
     <SummaryStats partners={data.partners} />
   {/if}
 
-  <hr class="my-8 border-gray-300" />
-
   <!-- Add Partner Form Section -->
   <div>
     <PartnerForm formAction="?/addPartner" submitButtonText="Add Partner Entry" serverErrors={form?.action === '?/addPartner' ? form : null}/>
   </div>
-  <hr class="my-8 border-gray-300" />
 
   <!-- Partner Records Section -->
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
