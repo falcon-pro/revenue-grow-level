@@ -2,76 +2,104 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { supabase } from '$lib/supabaseClient';
-import type { Database } from '../../../types/supabase'; // Adjust path as needed
+import type { Database } from '../../../types/supabase';
 import { PKR_RATE } from '$lib/utils/revenue';
-import { format, subDays } from 'date-fns'; // For date calculations
+import { format, subDays, parseISO, getMonth, getYear } from 'date-fns';
 
 type PartnerRow = Database['public']['Tables']['partners']['Row'];
+type MonthlyRevenueObject = Database['public']['Tables']['partners']['Row']['monthly_revenue'];
+type MonthlyRevenuePeriodEntry = { // Define structure for clarity
+    usd: number;
+    pkr: number;
+    status: 'pending' | 'received' | 'not_received';
+    source_type: 'manual' | 'api_daily_sum';
+    // last_api_update?: string; // Optional: timestamp of when this API data was pulled for this month
+};
 
-// Function to call the actual Adsterra API for the last 365 days
-async function getAdsterraRevenueForLastYear(apiKey: string): Promise<{
+interface AdsterraDailyItem {
+    date: string; // "YYYY-MM-DD"
+    revenue: number;
+    impression: number;
+    clicks: number;
+    ctr: number; // Or string, needs parsing if so
+}
+
+async function aggregateDailyApiDataToMonthly(
+    dailyItems: AdsterraDailyItem[]
+): Promise<Record<string, { usd: number }>> {
+    const monthlyAggregates: Record<string, { usd: number }> = {};
+
+    for (const item of dailyItems) {
+        try {
+            const itemDate = parseISO(item.date); // Handles "YYYY-MM-DD"
+            const monthKey = `${getYear(itemDate)}-${String(getMonth(itemDate) + 1).padStart(2, '0')}`; // "YYYY-MM"
+
+            if (typeof item.revenue === 'number') {
+                if (!monthlyAggregates[monthKey]) {
+                    monthlyAggregates[monthKey] = { usd: 0 };
+                }
+                monthlyAggregates[monthKey].usd += item.revenue;
+            }
+        } catch (e) {
+            console.error(`[API Fetch Util] Error parsing date or revenue for item: ${item.date}`, e);
+        }
+    }
+    return monthlyAggregates;
+}
+
+
+async function getAdsterraDataAndAggregate(apiKey: string): Promise<{
     success: boolean;
-    totalRevenueUSD?: number;
+    monthlyApiRevenue?: Record<string, MonthlyRevenuePeriodEntry>; // Keys are "YYYY-MM"
     errorMessage?: string;
-    rawApiResponse?: any; // Optional: to store the full response for debugging
 }> {
     const today = new Date();
-    // Adsterra API might want dates not in the future. Using "yesterday" as finish_date is safest.
-    const finishDate = format(today, 'yyyy-MM-dd'); // Or format(subDays(today, 1), 'yyyy-MM-dd') for "yesterday"
-    const startDate = format(subDays(today, 365), 'yyyy-MM-dd'); // 365 days ago
+    const finishDate = format(subDays(today,1), 'yyyy-MM-dd'); // Fetch up to YESTERDAY
+    const startDate = format(subDays(today, 366), 'yyyy-MM-dd'); // Approx last 365 days of data up to yesterday
 
     const apiUrl = `https://api3.adsterratools.com/publisher/stats.json?start_date=${startDate}&finish_date=${finishDate}&group_by=date`;
-    console.log(`[Adsterra API Call] Fetching from: ${apiUrl} for key: ${apiKey.substring(0,5)}...`);
+    console.log(`[Adsterra API Call] Fetching: ${apiUrl} for key prefix: ${apiKey.substring(0,5)}`);
 
     try {
         const response = await fetch(apiUrl, {
             method: 'GET',
-            headers: {
-                'X-API-Key': apiKey,
-                'Accept': 'application/json'
-            }
+            headers: { 'X-API-Key': apiKey, 'Accept': 'application/json' }
         });
 
         if (!response.ok) {
             let errorDetail = `HTTP status ${response.status}`;
-            try {
-                const errorJson = await response.json();
-                errorDetail = errorJson.message || errorJson.error || JSON.stringify(errorJson);
-            } catch (e) { /* Ignore if response wasn't JSON */ }
-            console.error(`[Adsterra API Call] Error: ${response.status}, Detail: ${errorDetail}`);
+            try { const errorJson = await response.json(); errorDetail = errorJson.message || JSON.stringify(errorJson); } catch (e) {/*ignore*/}
             return { success: false, errorMessage: `Adsterra API Error: ${errorDetail}` };
         }
 
-        const data = await response.json();
-        // console.log('[Adsterra API Call] Raw API Response:', JSON.stringify(data, null, 2)); // For debugging response structure
+        const rawData = await response.json();
 
-        if (!data.items || !Array.isArray(data.items)) {
-            // This can happen if the date range has no data or if the API key is invalid/no sites active etc.
-            console.warn('[Adsterra API Call] No "items" array in response or not an array. Data:', data);
-            return { success: true, totalRevenueUSD: 0, rawApiResponse: data, errorMessage: data.message || "No revenue data items returned for the period." };
+        if (!rawData.items || !Array.isArray(rawData.items)) {
+            return { success: true, monthlyApiRevenue: {}, errorMessage: rawData.message || "No revenue items in API response." };
         }
 
-        // Sum up the revenue from all items
-        let totalRevenue = 0;
-        for (const item of data.items) {
-            if (item && typeof item.revenue === 'number') {
-                totalRevenue += item.revenue;
-            }
+        const dailyItems = rawData.items as AdsterraDailyItem[];
+        const aggregatedApiMonths = await aggregateDailyApiDataToMonthly(dailyItems);
+
+        const finalMonthlyRevenue: Record<string, MonthlyRevenuePeriodEntry> = {};
+        for (const monthKey in aggregatedApiMonths) {
+            const monthlySumUsd = aggregatedApiMonths[monthKey].usd;
+            finalMonthlyRevenue[monthKey] = {
+                usd: parseFloat(monthlySumUsd.toFixed(2)), // Ensure 2 decimal places for currency
+                pkr: parseFloat((monthlySumUsd * PKR_RATE).toFixed(2)),
+                status: 'pending', // Default status for newly fetched API data
+                source_type: 'api_daily_sum',
+                // last_api_update: new Date().toISOString() // Add if you want to track this per month
+            };
         }
-        
-        console.log(`[Adsterra API Call] Successfully fetched. Total items: ${data.items.length}, Calculated total revenue: ${totalRevenue}`);
-        return { success: true, totalRevenueUSD: totalRevenue, rawApiResponse: data };
+        return { success: true, monthlyApiRevenue: finalMonthlyRevenue };
 
     } catch (e: any) {
-        console.error('[Adsterra API Call] Network or other error:', e);
-        return { success: false, errorMessage: `Network error or issue calling Adsterra: ${e.message}` };
+        return { success: false, errorMessage: `Network/fetch error: ${e.message}` };
     }
 }
 
-
 export const POST: RequestHandler = async ({ request, locals }) => {
-    console.log('[/api/fetch-adsterra-revenue] Received POST request.');
-
     if (!locals.admin || !locals.admin.id) {
         return json({ success: false, message: 'Unauthorized.' }, { status: 401 });
     }
@@ -79,78 +107,83 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     let partnerId: string;
     try {
-        const body = await request.json();
-        partnerId = body.partnerId;
+        const body = await request.json(); partnerId = body.partnerId;
         if (!partnerId) throw new Error('partnerId missing.');
-    } catch (e: any) {
-        return json({ success: false, message: `Invalid request: ${e.message}` }, { status: 400 });
-    }
+    } catch (e: any) { return json({ success: false, message: `Invalid request: ${e.message}` }, { status: 400 }); }
 
     console.log(`[/api/fetch-adsterra-revenue] For admin '${adminId}', processing partnerId: '${partnerId}'`);
 
     const { data: partner, error: fetchPartnerError } = await supabase
         .from('partners')
-        .select('id, adstera_api_key, name, revenue_source') // Fetch revenue_source too
-        .eq('id', partnerId)
-        .eq('admin_id', adminId)
-        .single();
+        .select('id, name, adstera_api_key, monthly_revenue, revenue_source') // Fetch existing monthly_revenue
+        .eq('id', partnerId).eq('admin_id', adminId).single();
 
     if (fetchPartnerError || !partner) {
         return json({ success: false, message: 'Partner not found or access denied.' }, { status: fetchPartnerError ? 500 : 404 });
     }
 
     if (!partner.adstera_api_key) {
-        console.log(`[/api/fetch-adsterra-revenue] No API key for partner: ${partner.name}`);
-        // Update status if it was 'api_loading'
-        if (partner.revenue_source === 'api_loading') {
-             await supabase.from('partners').update({
-                revenue_source: null, // Or determine based on monthly_revenue
-                last_api_check: new Date().toISOString(),
-                api_error_message: 'No API key configured.'
-            }).eq('id', partnerId);
+        await supabase.from('partners').update({
+            revenue_source: (partner.monthly_revenue && Object.keys(partner.monthly_revenue).length > 0) ? 'manual' : null,
+            last_api_check: new Date().toISOString(),
+            api_error_message: 'No API key configured for fetch attempt.'
+        }).eq('id', partnerId);
+        return json({ success: true, message: 'No API key configured.', partnerName: partner.name });
+    }
+
+    const apiResult = await getAdsterraDataAndAggregate(partner.adstera_api_key);
+
+    let newDbRevenueSource = partner.revenue_source; // Start with existing
+    let newApiErrorMessage = null;
+
+    if (!apiResult.success) {
+        newDbRevenueSource = 'api_error';
+        newApiErrorMessage = apiResult.errorMessage || 'Unknown error fetching from Adsterra.';
+    } else if (apiResult.monthlyApiRevenue && Object.keys(apiResult.monthlyApiRevenue).length > 0) {
+        newDbRevenueSource = 'api_synced'; // Or just 'api' if you prefer
+        newApiErrorMessage = apiResult.errorMessage; // Store info message like "no items" if present
+    } else if (apiResult.errorMessage) { // Success true, but e.g. "no items"
+        newDbRevenueSource = 'api'; // Still, an API check happened.
+        newApiErrorMessage = apiResult.errorMessage;
+    }
+
+
+    // Merge API data with existing manual data
+    // API data for a given month OVERWRITES any existing data for that month if it comes from API
+    // Manual entries for OTHER months are preserved.
+    let finalMonthlyRevenueData: MonthlyRevenueObject = partner.monthly_revenue ? JSON.parse(JSON.stringify(partner.monthly_revenue)) : {};
+    if (finalMonthlyRevenueData === null) finalMonthlyRevenueData = {}; // Ensure it's an object
+
+    if (apiResult.success && apiResult.monthlyApiRevenue) {
+        for (const monthKey in apiResult.monthlyApiRevenue) {
+            // If an entry for this month already exists AND it's manual, you might want to keep it or have merging rule.
+            // Current logic: API data for a month overwrites.
+            finalMonthlyRevenueData[monthKey] = apiResult.monthlyApiRevenue[monthKey];
         }
-        return json({ success: true, message: 'No API key configured.', revenue: null, partnerName: partner.name });
     }
 
-    const apiKey = partner.adstera_api_key;
-    const apiResult = await getAdsterraRevenueForLastYear(apiKey);
-
-    let dbUpdatePayload: Partial<PartnerRow> = {
+    const updatePayload: Partial<PartnerRow> = {
+        monthly_revenue: finalMonthlyRevenueData,
         last_api_check: new Date().toISOString(),
+        revenue_source: newDbRevenueSource,
+        api_error_message: newApiErrorMessage,
+        // We NO LONGER update api_revenue_usd / pkr directly at the top partner level here.
+        // Those fields could be removed or re-purposed later.
+        api_revenue_usd: null, // Nullify old aggregate field
+        api_revenue_pkr: null  // Nullify old aggregate field
     };
-
-    if (apiResult.success && apiResult.totalRevenueUSD !== undefined) {
-        dbUpdatePayload.api_revenue_usd = apiResult.totalRevenueUSD;
-        dbUpdatePayload.api_revenue_pkr = apiResult.totalRevenueUSD * PKR_RATE;
-        dbUpdatePayload.revenue_source = 'api';
-        dbUpdatePayload.api_error_message = apiResult.errorMessage || null; // Clear error on success, or store info message if present
-    } else {
-        dbUpdatePayload.revenue_source = 'api_error';
-        dbUpdatePayload.api_error_message = apiResult.errorMessage || 'Unknown API error from Adsterra.';
-        // Keep existing api_revenue_usd/pkr on error, or nullify them?
-        // Nullifying makes it clear the last fetch failed to get a value.
-        dbUpdatePayload.api_revenue_usd = null;
-        dbUpdatePayload.api_revenue_pkr = null;
-    }
 
     const { error: updateDbError } = await supabase
-        .from('partners')
-        .update(dbUpdatePayload)
-        .eq('id', partnerId);
+        .from('partners').update(updatePayload).eq('id', partnerId);
 
     if (updateDbError) {
-        console.error('[/api/fetch-adsterra-revenue] Supabase error updating partner after API call:', updateDbError);
-        return json({ success: false, message: `Failed to update partner in DB: ${updateDbError.message}` }, { status: 500 });
+        return json({ success: false, message: `DB update failed: ${updateDbError.message}` }, { status: 500 });
     }
-    
-    // Response to client
-    const clientResponse = {
-        success: apiResult.success,
-        message: apiResult.errorMessage ? `API Fetch: ${apiResult.errorMessage}` : 'Adsterra revenue updated successfully.',
-        partnerName: partner.name,
-        fetchedRevenueUSD: apiResult.totalRevenueUSD,
-        updatedSource: dbUpdatePayload.revenue_source
-    };
-    console.log('[/api/fetch-adsterra-revenue] Sending response to client:', clientResponse);
-    return json(clientResponse);
+
+    return json({
+        success: true, // Overall success of THIS endpoint's operation
+        apiCallSuccess: apiResult.success,
+        message: newApiErrorMessage || (apiResult.success ? 'Adsterra data synced to monthly entries.' : `Adsterra fetch failed: ${apiResult.errorMessage}`),
+        partnerName: partner.name
+    });
 };

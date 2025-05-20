@@ -7,7 +7,7 @@ type Partner = Database['public']['Tables']['partners']['Row'];
 type MonthlyRevenueEntry = Partial<Database['public']['Tables']['partners']['Row']['monthly_revenue'][string]>;
 
 
-export const PKR_RATE = 280; // <-- IMPORTANT: Update to your current desired rate
+export const PKR_RATE = 220; // <-- IMPORTANT: Update to your current desired rate
 
 interface EffectiveRevenueResult {
     totalUSD: number;
@@ -17,66 +17,43 @@ interface EffectiveRevenueResult {
     sourceForDisplay: 'api' | 'manual' | 'api_loading' | 'api_error' | 'N/A';
 }
 
-export function getEffectiveRevenue(partner: Partner | null | undefined): EffectiveRevenueResult {
-    const defaultResult: EffectiveRevenueResult = {
-        totalUSD: 0, totalPKR: 0,
-        manualSumUSD: 0, manualSumPKR: 0,
-        sourceForDisplay: 'N/A'
-    };
+// src/lib/utils/revenue.ts
+export function getEffectiveRevenue(partner: Partner | null | undefined): {
+    totalUSD: number;
+    totalPKR: number;
+    manualSumUSD: number; // Might be less relevant now or renamed
+    apiSumUSD: number;    // Sum of entries where entry.source === 'api'
+    sourceForDisplay: string; // 'API', 'Manual', 'Mixed', 'N/A'
+} {
+    const result = { totalUSD: 0, totalPKR: 0, manualSumUSD: 0, apiSumUSD: 0, sourceForDisplay: 'N/A' };
+    if (!partner || !partner.monthly_revenue) return result;
 
-    if (!partner) return defaultResult;
+    let hasApiEntries = false;
+    let hasManualEntries = false;
+    const monthlyData = partner.monthly_revenue as Record<string, MonthlyRevenueEntry>;
 
-    let manualSumUSD = 0;
-    let manualSumPKR = 0;
-    const monthlyRevenueMap = partner.monthly_revenue as Record<string, MonthlyRevenueEntry> | null;
-
-    if (monthlyRevenueMap && typeof monthlyRevenueMap === 'object') {
-        Object.values(monthlyRevenueMap).forEach(entry => {
-            const usd = entry?.usd ?? 0;
-            manualSumUSD += usd;
-            // Ensure pkr is calculated if not present or uses current PKR_RATE for consistency in sum
-            manualSumPKR += entry?.pkr ?? (usd * PKR_RATE);
-        });
-    }
-    defaultResult.manualSumUSD = manualSumUSD;
-    defaultResult.manualSumPKR = manualSumPKR;
-
-
-    const partnerRevenueSource = partner.revenue_source as EffectiveRevenueResult['sourceForDisplay'] | null;
-
-    // Determine final displayed values based on partner.revenue_source
-    switch (partnerRevenueSource) {
-        case 'api':
-            if (partner.api_revenue_usd != null) {
-                defaultResult.totalUSD = partner.api_revenue_usd;
-                defaultResult.totalPKR = partner.api_revenue_pkr ?? (partner.api_revenue_usd * PKR_RATE);
-                defaultResult.sourceForDisplay = 'api';
-            } else { // API source but no data, fallback to manual or N/A
-                defaultResult.totalUSD = manualSumUSD;
-                defaultResult.totalPKR = manualSumPKR;
-                defaultResult.sourceForDisplay = manualSumUSD > 0 ? 'manual' : 'N/A';
+    Object.values(monthlyData).forEach(entry => {
+        const usd = entry?.usd ?? 0;
+        if (usd > 0) {
+            result.totalUSD += usd;
+            result.totalPKR += (entry?.pkr ?? (usd * PKR_RATE));
+            if (entry?.source === 'api') {
+                result.apiSumUSD += usd;
+                hasApiEntries = true;
+            } else { // Assume 'manual' or undefined source as manual for this sum
+                result.manualSumUSD += usd;
+                hasManualEntries = true;
             }
-            break;
-        case 'api_error':
-            defaultResult.totalUSD = manualSumUSD; // Show manual sum on API error
-            defaultResult.totalPKR = manualSumPKR;
-            defaultResult.sourceForDisplay = 'api_error';
-            break;
-        case 'manual':
-            defaultResult.totalUSD = manualSumUSD;
-            defaultResult.totalPKR = manualSumPKR;
-            defaultResult.sourceForDisplay = 'manual';
-            break;
-        case 'api_loading':
-            defaultResult.totalUSD = 0; // Show 0 while API is loading
-            defaultResult.totalPKR = 0;
-            defaultResult.sourceForDisplay = 'api_loading';
-            break;
-        default: // Includes null or other unforeseen statuses
-            defaultResult.totalUSD = manualSumUSD;
-            defaultResult.totalPKR = manualSumPKR;
-            defaultResult.sourceForDisplay = manualSumUSD > 0 ? 'manual' : 'N/A';
-            break;
-    }
-    return defaultResult;
+        }
+    });
+
+    if (hasApiEntries && hasManualEntries) result.sourceForDisplay = 'Mixed';
+    else if (hasApiEntries) result.sourceForDisplay = 'API';
+    else if (hasManualEntries) result.sourceForDisplay = 'Manual';
+    
+    // If top-level revenue_source indicates API is loading/error, that might override
+    if (partner.revenue_source === 'api_loading') result.sourceForDisplay = 'API Loading';
+    if (partner.revenue_source === 'api_error') result.sourceForDisplay = 'API Error';
+
+    return result;
 }
