@@ -2,18 +2,17 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-// This will handle POST requests to /logout
-export const POST: RequestHandler = async ({ cookies }) => {
-    console.log('[/logout/+server.ts] Logging out admin.');
-    // Clear the admin session cookie
-    cookies.delete('admin_session', { path: '/' });
+const SESSION_COOKIE_NAME = 'admin_session'; // Make sure this matches hook
 
-    // Redirect to the access PIN page
-    throw redirect(303, '/access-pin');
+export const POST: RequestHandler = async ({ cookies }) => {
+    console.log('[/logout/+server.ts] POST: Clearing admin session cookie and redirecting to access-pin.');
+    cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+    throw redirect(303, '/access-pin?reason=logged_out'); // Redirect to login after clearing cookie
 };
 
-// Optional: If someone tries to GET /logout, redirect them too
-export const GET: RequestHandler = async () => {
-    console.log('[/logout/+server.ts] GET request to logout, redirecting.');
-    throw redirect(303, '/access-pin');
+// Optional: Handle GET requests to /logout as well, for convenience or if linked directly
+export const GET: RequestHandler = async ({ cookies }) => {
+    console.log('[/logout/+server.ts] GET: Clearing admin session cookie and redirecting to access-pin.');
+    cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+    throw redirect(303, '/access-pin?reason=logged_out_get');
 };

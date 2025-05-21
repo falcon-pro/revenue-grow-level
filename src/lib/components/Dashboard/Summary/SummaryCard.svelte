@@ -1,34 +1,59 @@
 <!-- src/lib/components/Dashboard/Summary/SummaryCard.svelte -->
 <script lang="ts">
   export let label: string = 'Label';
-  export let value: string | number = '-'; // Default value is '-'
+  export let value: string | number = '-';
   export let description: string = '';
   export let trend: 'up' | 'down' | 'neutral' = 'neutral';
   export let loading: boolean = false;
   export let icon: string | null = null;
-  
-  // Dynamic value coloring based on trend
-  $: valueColor = trend === 'up' ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-indigo-600';
+
+  // Special label override (e.g., Suspended Accounts)
+  const specialLabelStyles = {
+    'Suspended Accounts': {
+      valueColor: 'text-red-400',
+      iconTextColor: 'text-red-400',
+      iconBg: 'bg-red-50 group-hover:bg-red-100'
+    }
+    // Add more labels as needed
+  };
+
+  // Get style overrides based on label
+  $: labelStyles = specialLabelStyles[label] || null;
+
+  // Value color logic
+  $: valueColor = labelStyles
+    ? labelStyles.valueColor
+    : trend === 'up'
+    ? 'text-green-600'
+    : trend === 'down'
+    ? 'text-red-600'
+    : 'text-indigo-600';
+
+  // Icon style logic
+  $: iconTextColor = labelStyles ? labelStyles.iconTextColor : 'text-indigo-600';
+  $: iconBgColor = labelStyles ? labelStyles.iconBg : 'bg-indigo-50 group-hover:bg-indigo-100';
 </script>
 
 <div class="bg-white p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100 hover:border-indigo-100 group">
   <div class="flex justify-between items-start mb-3">
     <div>
       <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
+
       {#if loading}
         <div class="h-8 w-3/4 mt-2 bg-gray-200 rounded animate-pulse"></div>
       {:else}
         <p class={`text-2xl font-bold mt-1 ${valueColor} transition-colors duration-200`}>
           {value}
+
           {#if trend !== 'neutral'}
             <span class="ml-2 text-sm inline-flex items-center">
               {#if trend === 'up'}
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M12 7a1 1 0 01-1 1H9v1h2a1 1 0 110 2H9v1h2a1 1 0 110 2H9v1a1 1 0 11-2 0v-1H5a1 1 0 110-2h2v-1H5a1 1 0 110-2h2V8H5a1 1 0 010-2h2V5a1 1 0 112 0v1h2a1 1 0 011 1z" clip-rule="evenodd"/>
+                  <path fill-rule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd" />
                 </svg>
               {:else}
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd"/>
+                  <path fill-rule="evenodd" d="M12 7a1 1 0 01-1 1H9v1h2a1 1 0 110 2H9v1h2a1 1 0 110 2H9v1a1 1 0 11-2 0v-1H5a1 1 0 110-2h2v-1H5a1 1 0 110-2h2V8H5a1 1 0 010-2h2V5a1 1 0 112 0v1h2a1 1 0 011 1z" clip-rule="evenodd" />
                 </svg>
               {/if}
             </span>
@@ -36,14 +61,14 @@
         </p>
       {/if}
     </div>
-    
+
     {#if icon}
-      <div class="p-2 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 transition-colors duration-200">
+      <div class={`p-2 rounded-lg ${iconBgColor} ${iconTextColor} transition-colors duration-200`}>
         {@html icon}
       </div>
     {/if}
   </div>
-  
+
   {#if description && !loading}
     <p class="text-xs text-gray-500 mt-2 truncate">{description}</p>
   {:else if loading}
