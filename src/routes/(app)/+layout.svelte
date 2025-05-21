@@ -19,8 +19,8 @@
 
 
   // --- Inactivity Timer Logic (keep this as is) ---
-  // const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
-  const INACTIVITY_TIMEOUT_MS = 15 * 1000; // For quick testing (15 seconds)
+  const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
+  // const INACTIVITY_TIMEOUT_MS = 15 * 1000; // For quick testing (15 seconds)
 
   let inactivityTimer: number | undefined;
   function resetInactivityTimer() { /* ... same ... */ if (browser && data?.admin) { clearTimeout(inactivityTimer); inactivityTimer = window.setTimeout(forceLogoutDueToInactivity, INACTIVITY_TIMEOUT_MS); } }
