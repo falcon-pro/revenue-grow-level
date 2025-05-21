@@ -195,7 +195,7 @@ async function closeDeleteModal() {
   }
 </script>
 
-<div class="space-y-8 p-4 md:p-6 lg:p-8">
+<div class="space-y-8 p-4 md:p-6 lg:p-8 lg:pt-0">
   <!-- Summary Stats Section -->
   {#if data.partners }
     <SummaryStats partners={data.partners} />

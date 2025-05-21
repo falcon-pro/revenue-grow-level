@@ -1,33 +1,29 @@
 <!-- src/routes/(app)/+layout.svelte -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { fade } from 'svelte/transition';
   import { goto } from '$app/navigation';
-  // import { page } from '$app/stores'; // No longer strictly needed here for redirectTo in this specific function
+  import { get } from 'svelte/store';
+  import { page } from '$app/stores'; // Still useful for redirectTo on forced logout
   import type { LayoutData } from './$types';
-  import AdminBadge from '$lib/components/AdminBadge.svelte'; // Create this component or comment out its usage
+  import AdminBadge from '$lib/components/AdminBadge.svelte';
+  import { browser } from '$app/environment'; // Import browser
+  import { toast } from '$lib/stores/toastStore';
 
-  export let data: LayoutData;
+  export let data: LayoutData; // This `data.admin` is from server initial load.
   let isScrolled = false;
 
-  $: headerClass = `
+    $: headerClass = `
     sticky top-0 z-50 transition-all duration-300 ease-in-out
     ${isScrolled ? 'bg-white bg-opacity-80 shadow-sm backdrop-blur-md' : 'bg-white'}
   `;
 
 
-  const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
-  // const INACTIVITY_TIMEOUT_MS = 15 * 1000; // For quick testing (15 seconds)
+  // --- Inactivity Timer Logic (keep this as is) ---
+  // const INACTIVITY_TIMEOUT_MS = 20 * 60 * 1000;
+  const INACTIVITY_TIMEOUT_MS = 15 * 1000; // For quick testing (15 seconds)
+
   let inactivityTimer: number | undefined;
-
-  function resetInactivityTimer() {
-    if (typeof window !== 'undefined' && data?.admin) { // Only run timer if actually logged in
-      // console.log('[Client Inactivity] Activity detected, resetting timer.');
-      clearTimeout(inactivityTimer);
-      inactivityTimer = window.setTimeout(forceLogoutDueToInactivity, INACTIVITY_TIMEOUT_MS);
-    }
-  }
-
+  function resetInactivityTimer() { /* ... same ... */ if (browser && data?.admin) { clearTimeout(inactivityTimer); inactivityTimer = window.setTimeout(forceLogoutDueToInactivity, INACTIVITY_TIMEOUT_MS); } }
   async function forceLogoutDueToInactivity() {
     console.log('[Client Inactivity] Timeout reached. Navigating to /logout.');
     if (typeof window !== 'undefined') {
@@ -42,40 +38,103 @@
   }
 
   const activityEvents = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
-  const handleScroll = () => { if (typeof window !== 'undefined') isScrolled = window.scrollY > 10; };
+  const handleScroll = () => { if (browser) isScrolled = window.scrollY > 10; };
+
+
+  // --- NEW: Single Session Check Logic ---
+  let sessionCheckInterval: number | undefined;
+  const SESSION_CHECK_INTERVAL_MS = 1 * 60 * 1000; // Check every 1 minute for example
+
+  async function verifyClientSession() {
+      if (!browser || !data?.admin) { // Only run if browser and was initially logged in
+          // If data.admin becomes null due to navigation or logout, this logic should also stop or not run
+          if (sessionCheckInterval) clearInterval(sessionCheckInterval);
+          return;
+      }
+
+      console.log('[Session Check] Verifying client session status with server...');
+      try {
+          const response = await fetch('/api/auth/check-session'); // Uses existing cookie
+          if (response.ok) {
+              const sessionStatus = await response.json();
+              if (sessionStatus.isAuthenticated && sessionStatus.adminId === data.admin?.id) {
+                  // console.log('[Session Check] Client session still valid on server for admin:', sessionStatus.adminId);
+              } else {
+                  // Server says session is NOT valid (or for a different admin, unlikely here)
+                  console.log('[Session Check] Server indicates client session is no longer valid. Forcing logout.');
+                  toastAndRedirectToLogin("Your session was ended because you logged in elsewhere or it expired.");
+              }
+          } else {
+              // Network error or server error during check
+              console.warn('[Session Check] API call to check session failed with status:', response.status);
+              // Optionally, retry or after a few failures, force logout
+          }
+      } catch (error) {
+          console.error('[Session Check] Error verifying client session:', error);
+      }
+  }
+
+ function toastAndRedirectToLogin(message: string) {
+    // Now uses the toast system
+    toast.warning(message, 7000); // Use warning or error type as appropriate
+
+    // It's crucial that the redirect to /logout happens to clear HttpOnly server-side cookie
+    // /logout itself will then redirect to /access-pin
+    const currentPathForRedirect = $page.url.pathname + $page.url.search; // Store before goto changes page store
+    goto(`/logout?reason=session_superseded_or_expired&redirectTo=${encodeURIComponent(currentPathForRedirect)}`, { replaceState: true });
+  }
+
+  // --- End Single Session Check Logic ---
+
 
   onMount(() => {
-    if (typeof window !== 'undefined') {
+    if (browser) {
       window.addEventListener('scroll', handleScroll, { passive: true });
-      if (data?.admin) { // Only setup inactivity listeners if user is actually logged in
-        console.log('[Client Inactivity] Setting up inactivity timer for authenticated layout.');
+      if (data?.admin) { // If logged in on initial load
+        console.log('[Layout Mount] Setting up inactivity & session check timers.');
         activityEvents.forEach(event => window.addEventListener(event, resetInactivityTimer, { passive: true }));
-        resetInactivityTimer(); // Start the timer
+        resetInactivityTimer();
+
+        // Start session checker
+        verifyClientSession(); // Initial check
+        sessionCheckInterval = window.setInterval(verifyClientSession, SESSION_CHECK_INTERVAL_MS);
+        window.addEventListener('focus', verifyClientSession); // Also check when tab gains focus
       }
     }
     return () => {
-      if (typeof window !== 'undefined') {
+      if (browser) {
         window.removeEventListener('scroll', handleScroll);
         clearTimeout(inactivityTimer);
         activityEvents.forEach(event => window.removeEventListener(event, resetInactivityTimer));
-        // console.log('[Client Inactivity] Inactivity timer/listeners cleared.');
+        
+        clearInterval(sessionCheckInterval); // Clear session check interval
+        window.removeEventListener('focus', verifyClientSession); // Remove focus listener
+        console.log('[Layout Destroy] Cleaned up timers and listeners.');
       }
     };
   });
 
-  // This reactive statement ensures that if the admin logs out (data.admin becomes null),
-  // any existing client-side inactivity timer is cleared.
-  $: if (typeof window !== 'undefined' && !data?.admin && inactivityTimer) {
-    console.log('[Client Inactivity] Admin data became null, clearing timer.');
-    clearTimeout(inactivityTimer);
-    activityEvents.forEach(event => {
-        window.removeEventListener(event, resetInactivityTimer);
-    });
-  }
-  // Also, if admin logs IN (data.admin becomes non-null after being null), set up timer
-  // This is mainly for first load. Subsequent navigations within (app) will re-run onMount if component remounts.
-  // Or, better: let onMount with the data.admin check handle initial setup.
-  // The crucial part is that `data.admin` comes from the server load.
+ // Reactive statement if `data.admin` (from server load) changes (e.g. after programmatic logout)
+ $: if (browser && prevAdminState !== undefined && data?.admin !== prevAdminState) {
+     console.log('[Layout Reactive] data.admin state changed. Old:', prevAdminState, 'New:', data?.admin);
+     if (!data?.admin) { // User logged out server-side (e.g. cookie expired, hook nulled it)
+         console.log('[Layout Reactive] Admin logged out on server, ensuring client timers are off.');
+         clearTimeout(inactivityTimer);
+         clearInterval(sessionCheckInterval);
+         activityEvents.forEach(event => window.removeEventListener(event, resetInactivityTimer));
+         window.removeEventListener('focus', verifyClientSession);
+     } else if (data?.admin && !prevAdminState) { // User just logged in
+         console.log('[Layout Reactive] Admin just logged in, setting up client timers.');
+         activityEvents.forEach(event => window.addEventListener(event, resetInactivityTimer, { passive: true }));
+         resetInactivityTimer();
+         verifyClientSession(); // Initial check
+         sessionCheckInterval = window.setInterval(verifyClientSession, SESSION_CHECK_INTERVAL_MS);
+         window.addEventListener('focus', verifyClientSession);
+     }
+     prevAdminState = data?.admin;
+ }
+ let prevAdminState = data?.admin; // Initialize for comparison
+
 </script>
 
 <div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
