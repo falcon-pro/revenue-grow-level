@@ -73,7 +73,7 @@ export const actions: Actions = {
                 secure: !dev, // True in production (HTTPS), false in local dev (HTTP)
                 sameSite: 'lax', // Or 'strict' for more security if applicable
                 // maxAge: 60 * 60 * 24 * 7, // Cookie expires in 7 days (in seconds)
-                maxAge:  20 * 60 * 1000, // Cookie expires in 30 mintues (in seconds)
+                maxAge: 20 * 60, // ✅ 20 minutes in seconds
             });
 
             console.log('[/access-pin verifyPin action] Redirecting to:', redirectTo);
