@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 import { supabase } from '$lib/supabaseClient';
 import type { Database } from '../../../types/supabase';
 import { PKR_RATE } from '$lib/utils/revenue';
-import { format, subDays, parseISO, getMonth, getYear } from 'date-fns';
+import { format, subDays, parseISO, getMonth, getYear, addDays, subYears } from 'date-fns';
 
 type PartnerRow = Database['public']['Tables']['partners']['Row'];
 type MonthlyRevenueObject = Database['public']['Tables']['partners']['Row']['monthly_revenue'];
@@ -54,8 +54,10 @@ async function getAdsterraDataAndAggregate(apiKey: string): Promise<{
     errorMessage?: string;
 }> {
     const today = new Date();
-    const finishDate = format(subDays(today,1), 'yyyy-MM-dd'); // Fetch up to YESTERDAY
-    const startDate = format(subDays(today, 366), 'yyyy-MM-dd'); // Approx last 365 days of data up to yesterday
+    const finishDate = format(subYears(today,1), 'yyyy-MM-dd'); // Fetch up to YESTERDAY
+    const startDate = format(addDays(today, 1), 'yyyy-MM-dd'); // Approx last 365 days of data up to yesterday
+
+        console.log(`Fetching data from ${startDate} to ${finishDate}`);
 
     const apiUrl = `https://api3.adsterratools.com/publisher/stats.json?start_date=${startDate}&finish_date=${finishDate}&group_by=date`;
     console.log(`[Adsterra API Call] Fetching: ${apiUrl} for key prefix: ${apiKey.substring(0,5)}`);
