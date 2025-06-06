@@ -54,8 +54,8 @@ async function getAdsterraDataAndAggregate(apiKey: string): Promise<{
     errorMessage?: string;
 }> {
     const today = new Date();
-    const finishDate = format(subYears(today,1), 'yyyy-MM-dd'); // Fetch up to YESTERDAY
-    const startDate = format(addDays(today, 1), 'yyyy-MM-dd'); // Approx last 365 days of data up to yesterday
+      const finishDate = format(subDays(today,1), 'yyyy-MM-dd'); // Fetch up to YESTERDAY
+    const startDate = format(subDays(today, 366), 'yyyy-MM-dd'); // Approx last 365 days of data up to yesterday
 
         console.log(`Fetching data from ${startDate} to ${finishDate}`);
 
