@@ -13,6 +13,8 @@
   import DeletePartnerModal from '$lib/components/Modals/DeletePartnerModal.svelte';
   import EditPartnerModal from '$lib/components/Modals/EditPartnerModal.svelte';
   import ImportModal from '$lib/components/Modals/ImportModal/ImportModal.svelte';
+  // import Modal from '$lib/components/Dashboard/modal.svelte';
+
 
   // Types
   import type { Database } from '../../../types/supabase';
@@ -193,6 +195,17 @@ async function closeDeleteModal() {
         toast.error(`Export failed: ${e.message}`); // <<< --- CORRECTED TO USE TOAST ---
     }
   }
+
+  // let showModal = false;
+
+  // function openModal() {
+  //   showModal = true;
+  // }
+
+  // function closeModal() {
+  //   showModal = false;
+  // }
+
 </script>
 
 <div class="space-y-8 p-4 md:p-6 lg:p-8 lg:pt-0">
@@ -201,10 +214,29 @@ async function closeDeleteModal() {
     <SummaryStats partners={data.partners} />
   {/if}
 
+    <!-- Add Partner Button -->
+  <!-- <div>
+    <button
+      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+      on:click={openModal}
+    >
+      Add Partner Entry
+    </button>
+  </div> -->
+
+  <!-- Modal with Form -->
+  <!-- <Modal open={showModal} onClose={closeModal}>
+    <PartnerForm
+      formAction="?/addPartner"
+      submitButtonText="Add Partner Entry"
+      serverErrors={form?.action === '?/addPartner' ? form : null}
+    />
+  </Modal> -->
+
   <!-- Add Partner Form Section -->
-  <div>
+  <!-- <div>
     <PartnerForm formAction="?/addPartner" submitButtonText="Add Partner Entry" serverErrors={form?.action === '?/addPartner' ? form : null}/>
-  </div>
+  </div> -->
 
   <!-- Partner Records Section -->
 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

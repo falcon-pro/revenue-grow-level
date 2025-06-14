@@ -2,16 +2,20 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
   import SummaryCard from './SummaryCard.svelte'; // Assuming SummaryCard handles new props like trend, icon, loading
+  import Modal from '$lib/components/Dashboard/modal.svelte';
   import type { Database } from '../../../../types/supabase'; // Adjust path if needed
+  import type { PageData, ActionData } from '../$types';
   type Partner = Database['public']['Tables']['partners']['Row'];
   type MonthlyRevenueEntry = Partial<Database['public']['Tables']['partners']['Row']['monthly_revenue'][string]>;
-
+  import PartnerForm from '$lib/components/Dashboard/Forms/PartnerForm.svelte';
   import { formatCurrency } from '$lib/utils/formatters';
   import { getMonthName } from '$lib/utils/helpers';
   import { PKR_RATE } from '$lib/utils/revenue';
   import { onMount, afterUpdate } from 'svelte'; // afterUpdate might be useful for prevValues
 
   export let partners: Partner[] = [];
+  export let form: ActionData;
+
 
   // Summary State
   let isLoading = true; // Starts true, set to false after first calculation
@@ -217,6 +221,18 @@
     isLoading = true;
     setTimeout(() => calculateSummaries(selectedMonthFilter), 300); // Small delay for smooth UX
   }
+
+    let showModal = false;
+
+  function openModal() {
+    showModal = true;
+  }
+
+  function closeModal() {
+    showModal = false;
+  }
+
+
 </script>
 
 <div class="dashboard-summary" transition:fade|local={{ duration: 200 }}>
@@ -226,7 +242,42 @@
       <p class="text-sm text-gray-500">Overview of key financial metrics and account statuses.</p>
     </div>
     
-    <div class="relative w-full md:w-auto md:min-w-[200px]">
+    <div class="relative w-full md:w-auto md:min-w-[200px] flex items-center">
+        <!-- Add Partner Button -->
+  <div class="flex whitespace-nowrap mr-5">
+  <button
+    on:click={openModal}
+    class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 focus:ring-2 focus:ring-blue-400 focus:outline-none text-white font-semibold text-sm md:text-base px-5 py-2 rounded-xl shadow-md hover:shadow-lg transition-all duration-200 ease-in-out cursor-pointer"
+  >
+    <!-- Heroicons Plus Icon -->
+    <svg
+  xmlns="http://www.w3.org/2000/svg"
+  class="w-5 h-5 text-white"
+  fill="currentColor"
+  viewBox="0 0 20 20"
+  aria-hidden="true"
+>
+  <path
+    fill-rule="evenodd"
+    d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+    clip-rule="evenodd"
+  />
+</svg>
+
+    <span>Add Partner</span>
+  </button>
+</div>
+
+  <!-- Modal with Form -->
+  <Modal open={showModal} onClose={closeModal}>
+    <PartnerForm
+      formAction="?/addPartner"
+      submitButtonText="Add Partner Entry"
+      serverErrors={form?.action === '?/addPartner' ? form : null}
+    />
+  </Modal>
+
+
       <select
         bind:value={selectedMonthFilter}
         class="w-full pl-4 pr-10 py-2 text-sm bg-white border border-gray-200 rounded-lg shadow-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 appearance-none"

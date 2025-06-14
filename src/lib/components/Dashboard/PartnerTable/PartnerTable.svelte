@@ -57,7 +57,7 @@
 {:else}
   <div class="space-y-6">
     <!-- Sorting Controls -->
-    <div class="bg-white p-4 rounded-lg shadow sticky top-0 z-20 border border-slate-200/60">
+    <div class="bg-white p-4 rounded-lg shadow sticky top-0 z-0 border border-slate-200/60">
         <div class="flex flex-wrap items-center gap-2 sm:gap-3">
             <span class="text-sm font-medium text-slate-600 mr-2">Sort by:</span>
             {#each sortOptions as option (option.key)}

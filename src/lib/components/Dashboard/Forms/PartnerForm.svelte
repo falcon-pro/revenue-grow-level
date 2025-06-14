@@ -243,6 +243,7 @@
     </div>
 
     <form method="POST" action={formAction} class="divide-y divide-gray-200">
+      <div class="h-100 overflow-auto">
       <!-- Partner Information Section -->
       <div class="px-6 py-5 space-y-6">
         <div>
@@ -632,6 +633,7 @@
           </div>
         </div>
       </div>
+       </div>
 
       <!-- Form Footer -->
       <div class="px-6 py-4 bg-gray-50 text-right">
