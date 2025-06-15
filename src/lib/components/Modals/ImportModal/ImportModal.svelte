@@ -176,7 +176,7 @@
         </div>
     </div>
   </div>
-  <div slot="footer" class="flex flex-row-reverse gap-x-3">
+  <div slot="footer" class="flex md:flex-row-reverse flex-col gap-2 gap-x-3">
     <button id="importAddSelectedBtnModal" type="button" disabled={!atLeastOneRowSelected || isLoadingFile || isSubmittingImport} on:click={handleSubmitSelectedImports} class="inline-flex items-center justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto sm:text-sm disabled:opacity-50"> {#if isSubmittingImport} <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Importing... {:else} Add/Update Selected ({parsedSheetData.filter(r=>r.isSelected && r.validation?.isOkToImport).length}) Entries {/if} </button>
     <button type="button" on:click={closeByUserAction} disabled={isLoadingFile || isSubmittingImport} class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50"> Cancel </button>
   </div>

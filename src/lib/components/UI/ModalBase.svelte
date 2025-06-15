@@ -74,7 +74,7 @@
 
       <!-- Modal Footer (Optional) -->
       {#if $$slots.footer}
-        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse rounded-b-lg border-t border-gray-200">
+        <div class="whitespace-nowrap bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse rounded-b-lg border-t border-gray-200">
           <slot name="footer"></slot>
         </div>
       {/if}
