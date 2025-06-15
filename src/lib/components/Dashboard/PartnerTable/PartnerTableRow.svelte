@@ -1,6 +1,11 @@
+<!-- src/lib/components/Dashboard/PartnerTable/PartnerTableRow.svelte -->
 <script lang="ts">
   import type { Database } from '../../../../types/supabase';
-  type Partner = Database['public']['Tables']['partners']['Row'];
+  // Updated Partner type to include new optional fields
+  type Partner = Database['public']['Tables']['partners']['Row'] & {
+      api_total_impressions?: number | null;
+      api_country_breakdown?: Array<{ countryCode: string, impressions: number, revenue: number }> | null;
+  };
   type MonthlyRevenueEntryType = Partial<Database['public']['Tables']['partners']['Row']['monthly_revenue'][string]>;
 
   import { formatDate, formatCurrency } from '$lib/utils/formatters';
@@ -94,6 +99,20 @@
   $: revenuePKRStr = finalDisplayUSD != null && finalDisplayUSD > 0 && finalDisplayPKR != null ? `(${formatCurrency(finalDisplayPKR, 'PKR')})` : '';
 
   $: toggleButtonTooltipText = isSuspended ? 'Activate Account' : 'Suspend Account';
+
+  // NEW: Reactive variables for new partner fields
+  $: totalApiImpressionsForDisplay = (partner.api_total_impressions != null && partner.api_total_impressions > 0)
+    ? partner.api_total_impressions.toLocaleString()
+    : '-';
+  
+  $: topCountriesDisplay = (() => {
+    if (partner.api_country_breakdown && Array.isArray(partner.api_country_breakdown) && partner.api_country_breakdown.length > 0) {
+      return partner.api_country_breakdown.slice(0, 3).map(
+        c => `${c.countryCode}: ${c.impressions.toLocaleString()} imp / $${c.revenue.toFixed(2)}`
+      ).join('; ');
+    }
+    return 'N/A';
+  })();
   
   const requestToggleStatus = () => dispatch('requestToggleStatus', partner);
   const requestEdit = () => dispatch('requestEdit', partner);
@@ -110,18 +129,19 @@
     customClass?: string;
   }
   
+  // Re-organized as per request
   let primaryInfo: DataItem[] = [
-    { label: "Mobile", value: partner.mobile, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 2.25h9a1.5 1.5 0 0 1 1.5 1.5v16.5a1.5 1.5 0 0 1-1.5 1.5h-9a1.5 1.5 0 0 1-1.5-1.5V3.75a1.5 1.5 0 0 1 1.5-1.5zM12 18.75h.008v.008H12v-.008z" />' },
     { label: "Email", value: partner.email, truncate: true, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />' },
-    { label: "Address", value: partner.address, truncate: true, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />' },
+    { label: "Mobile", value: partner.mobile, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 2.25h9a1.5 1.5 0 0 1 1.5 1.5v16.5a1.5 1.5 0 0 1-1.5 1.5h-9a1.5 1.5 0 0 1-1.5-1.5V3.75a1.5 1.5 0 0 1 1.5-1.5zM12 18.75h.008v.008H12v-.008z" />' },
+    { label: "Webmoney", value: partner.webmoney,   icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5v-9A1.5 1.5 0 0 1 4.5 6zM12 9.75v4.5M8.25 9.75h7.5" />'},
   ];
 
   let adsterraInfo: DataItem[] = [
-    { label: "Webmoney", value: partner.webmoney, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h6m3-3.75l-3.75-3.75M17.25 19.5L21 15.75M3 13.5h18" />'}, // Placeholder icon
-    { label: "Multi Acc No.", value: partner.multi_account_no, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />' }, // Placeholder user group
+    { label: "Address", value: partner.address, truncate: true, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />' },
+    { label: "Multi Acc No.", value: partner.multi_account_no, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />' },
     { label: "Ad Link", value: partner.adstera_link, isLink: true, truncate: true, linkHref: partner.adstera_link, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />' },
-    { label: "Ad Email", value: partner.adstera_email_link, isLink: true, truncate: true, linkHref: partner.adstera_email_link, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M21.75 9v.906a2.25 2.25 0 0 1-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 0 0 1.183 1.981l6.478 3.488m8.839 2.51-4.66-2.51m0 0-1.023-.55a2.25 2.25 0 0 0-2.134 0l-1.022.55m0 0-4.661 2.51m16.5-16.5a2.25 2.25 0 0 0-2.25-2.25H3.75A2.25 2.25 0 0 0 1.5 6.75v4.5a2.25 2.25 0 0 0 2.25 2.25h13.5A2.25 2.25 0 0 0 19.5 11.25V9Z" />' }, // Placeholder Ad Email
-    { label: "API Key", value: partner.adstera_api_key, truncate: true, title: partner.adstera_api_key || 'No API Key', icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" />' }, // Placeholder key icon
+    { label: "Ad Email", value: partner.adstera_email_link, isLink: true, truncate: true, linkHref: partner.adstera_email_link, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M21.75 9v.906a2.25 2.25 0 0 1-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 0 0 1.183 1.981l6.478 3.488m8.839 2.51-4.66-2.51m0 0-1.023-.55a2.25 2.25 0 0 0-2.134 0l-1.022.55m0 0-4.661 2.51m16.5-16.5a2.25 2.25 0 0 0-2.25-2.25H3.75A2.25 2.25 0 0 0 1.5 6.75v4.5a2.25 2.25 0 0 0 2.25 2.25h13.5A2.25 2.25 0 0 0 19.5 11.25V9Z" />' },
+    { label: "API Key", value: partner.adstera_api_key, truncate: true, title: partner.adstera_api_key || 'No API Key', icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" />' },
   ];
 
 const valueDisplay = (val: string | undefined | null): string => val ?? 'N/A';
@@ -177,7 +197,7 @@ const valueDisplay = (val: string | undefined | null): string => val ?? 'N/A';
         {/if}
       </p>
       <div class="flex justify-between text-xs mt-1">
-        <span class="text-slate-500">Rev. Period: {revenuePeriodStr}</span>
+        <span class="text-slate-500">Rev. Period: {revenuePeriodStr} / Total Impressions:  {totalApiImpressionsForDisplay}</span>
         <span class="{latestStatusClass} !py-0.5 !px-1.5">{latestStatusText}</span>
       </div>
     </div>
@@ -187,7 +207,7 @@ const valueDisplay = (val: string | undefined | null): string => val ?? 'N/A';
     <dl class="grid grid-cols-1 gap-x-3 gap-y-3 text-sm">
       {#each primaryInfo as item (item.label)}
       <div class="flex items-start group">
-          {#if item.icon && mounted} <!-- Render icon only if mounted to avoid SSR mismatch on SVG -->
+          {#if item.icon && mounted}
              <span in:fly={{ y:5, duration: 200, delay: 100 }} class="flex-shrink-0 w-5 h-5 text-sky-600 mr-2.5 mt-0.5">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     {@html item.icon}
@@ -196,12 +216,36 @@ const valueDisplay = (val: string | undefined | null): string => val ?? 'N/A';
           {/if}
           <div class="flex-grow">
               <dt class="font-medium text-slate-500">{item.label}</dt>
-              <dd class="text-slate-700 {item.truncate ? '' : ''}" title={item.value || ''}>
-                  {@html valueDisplay(item.value)}
+              <dd class="text-slate-700 {item.truncate ? 'truncate' : ''}" title={item.value || ''}>
+                  {@html valueDisplay(item.truncate ? truncateText(item.value, 20) : item.value)}
               </dd>
           </div>
       </div>
       {/each}
+       <!-- NEW: Top Countries -->
+           <div class="flex items-start group/item sm:col-span-2">
+             <span class="flex-shrink-0 w-5 h-5 text-sky-600 mr-2.5 mt-0.5">
+               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A11.978 11.978 0 0 1 12 16.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 0 21 12c0-.778.099 1.533-.284-2.253M18.75 14.25a6.75 6.75 0 1 1-13.5 0 6.75 6.75 0 0 1 13.5 0Z" /></svg>
+             </span>
+             <div class="flex-grow min-w-0">
+                <dt class="font-medium text-slate-500">Countries / Impressions :</dt>
+                <dd class="text-slate-700 whitespace-pre-wrap text-xs">
+                    {topCountriesDisplay}
+                </dd>
+            </div>
+           </div>
+      <!-- NEW: Total API Impressions -->
+      <!-- <div class="flex items-start group">
+        <span class="flex-shrink-0 w-5 h-5 text-sky-600 mr-2.5 mt-0.5">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+        </span>
+        <div class="flex-grow min-w-0">
+            <dt class="font-medium text-slate-500">API Impressions (365d)</dt>
+            <dd class="text-slate-700">
+                {totalApiImpressionsForDisplay}
+            </dd>
+        </div>
+      </div> -->
     </dl>
     
     <hr class="border-slate-100">
@@ -239,6 +283,7 @@ const valueDisplay = (val: string | undefined | null): string => val ?? 'N/A';
                 </div>
             </div>
             {/each}
+            
         </dl>
     </details>
 
