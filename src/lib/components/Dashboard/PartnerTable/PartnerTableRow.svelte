@@ -196,7 +196,7 @@ const valueDisplay = (val: string | undefined | null): string => val ?? 'N/A';
           {/if}
           <div class="flex-grow">
               <dt class="font-medium text-slate-500">{item.label}</dt>
-              <dd class="text-slate-700 {item.truncate ? 'w-75' : ''}" title={item.value || ''}>
+              <dd class="text-slate-700 {item.truncate ? '' : ''}" title={item.value || ''}>
                   {@html valueDisplay(item.value)}
               </dd>
           </div>

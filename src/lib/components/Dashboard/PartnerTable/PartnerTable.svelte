@@ -34,7 +34,7 @@
     { key: 'created_at', label: 'Added On' },
     { key: 'account_start', label: 'Start Date' },
     { key: 'revenuePeriodRange', label: 'Rev. Period' },
-    { key: 'effectiveRevenue', label: 'Disp. Revenue' },
+    { key: 'effectiveRevenue', label: ' Revenue' },
     { key: 'latestPayStatus', label: 'Pay Status' },
     { key: 'account_status', label: 'Acc. Status' },
   ];
@@ -58,12 +58,13 @@
   <div class="space-y-6">
     <!-- Sorting Controls -->
     <div class="bg-white p-4 rounded-lg shadow sticky top-0 z-0 border border-slate-200/60">
-        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-            <span class="text-sm font-medium text-slate-600 mr-2">Sort by:</span>
+      <span class="text-sm font-medium text-slate-600 mr-2">Sort by:</span>
+        <div class="flex flex-wrap items-center justify-between gap-2 sm:gap-3 mt-2">
             {#each sortOptions as option (option.key)}
+            <div class="flex items-center">
                 <button
                     on:click={() => requestSort(option.key)}
-                    class="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-150 ease-in-out
+                    class="w-[120px] px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-150 ease-in-out
                            focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-sky-500
                            {sortColumn === option.key 
                               ? 'bg-sky-600 text-white shadow-sm hover:bg-sky-700' 
@@ -84,6 +85,7 @@
                         {/if}
                     </div>
                 </button>
+                </div>
             {/each}
         </div>
     </div>

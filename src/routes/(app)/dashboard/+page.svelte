@@ -208,7 +208,7 @@ async function closeDeleteModal() {
 
 </script>
 
-<div class="space-y-8 p-4 md:p-6 lg:p-8 lg:pt-0">
+<div class="space-y-8 p-0 md:p-6 lg:p-8 lg:pt-0">
   <!-- Summary Stats Section -->
   {#if data.partners }
     <SummaryStats partners={data.partners} />
@@ -256,7 +256,7 @@ async function closeDeleteModal() {
         <button 
           type="button" 
           on:click={openImportModal}
-          class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-150"
+          class="inline-flex items-center w-full md:w-max px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-150"
         >
           <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
@@ -265,6 +265,7 @@ async function closeDeleteModal() {
         </button>
 
         <!-- Refresh API Button -->
+         <div class="w-full md:w-max">
         <form method="POST" action="?/refreshAllApiRevenue" use:enhance={() => {
             isRefreshingAllApis = true;
             toast.info('Starting API revenue refresh for all accounts. This may take a few moments.', 7000);
@@ -273,7 +274,7 @@ async function closeDeleteModal() {
           <button 
             type="submit" 
             disabled={isRefreshingAllApis}
-            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-amber-500 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-75 transition-all duration-150"
+            class="w-full md:w-max inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-amber-500 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-75 transition-all duration-150"
           >
             {#if isRefreshingAllApis}
               <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -289,12 +290,13 @@ async function closeDeleteModal() {
             {/if}
           </button>
         </form>
+        </div>
 
         <!-- Export Button -->
         <button
           type="button"
           on:click={exportDisplayedToExcel} 
-          class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-150"
+          class="w-full md:w-max inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-150"
         >
           <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
@@ -325,7 +327,7 @@ async function closeDeleteModal() {
   </div>
 
   <!-- Content Section -->
-  <div class="px-6 py-4">
+  <div class="md:px-6 px-3 py-3 md:py-4">
     {#if data.partners === undefined || data.partners === null}
       <div class="space-y-4">
         <TableSkeleton rows={5} columns={16}/>
