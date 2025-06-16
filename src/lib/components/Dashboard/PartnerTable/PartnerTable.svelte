@@ -61,10 +61,10 @@
       <span class="text-sm font-medium text-slate-600 mr-2">Sort by:</span>
         <div class="flex flex-wrap items-center justify-between gap-2 sm:gap-3 mt-2">
             {#each sortOptions as option (option.key)}
-            <div class="flex items-center">
+            <div class="flex items-center md:w-auto w-[48%]">
                 <button
                     on:click={() => requestSort(option.key)}
-                    class="w-[120px] px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-150 ease-in-out
+                    class="md:w-[120px] w-full px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-150 ease-in-out
                            focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-sky-500
                            {sortColumn === option.key 
                               ? 'bg-sky-600 text-white shadow-sm hover:bg-sky-700' 

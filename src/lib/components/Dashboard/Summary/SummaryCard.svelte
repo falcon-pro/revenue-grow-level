@@ -1,77 +1,54 @@
 <!-- src/lib/components/Dashboard/Summary/SummaryCard.svelte -->
 <script lang="ts">
-  export let label: string = 'Label';
-  export let value: string | number = '-';
-  export let description: string = '';
-  export let trend: 'up' | 'down' | 'neutral' = 'neutral';
-  export let loading: boolean = false;
-  export let icon: string | null = null;
+  export let label: string;
+  export let value: string | number;
+  export let change: string; // e.g., "+5.2%"
+  export let icon: string | null;
+  export let loading: boolean;
+  export let trend: 'up' | 'down' | 'neutral' = 'up';
 
-  // Special label override (e.g., Suspended Accounts)
-  const specialLabelStyles = {
-    'Suspended Accounts': {
-      valueColor: 'text-red-400',
-      iconTextColor: 'text-red-400',
-      iconBg: 'bg-red-50 group-hover:bg-red-100'
-    }
-    // Add more labels as needed
-  };
+  const trendUpIcon = `<svg width="12" height="12" viewBox="0 0 10 7" fill="none" xmlns="http://www.w3.org/2000/svg" class="inline-block"><path d="M1 6L3.5 3.5L6 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const trendDownIcon = `<svg width="12" height="12" viewBox="0 0 10 7" fill="none" xmlns="http://www.w3.org/2000/svg" class="inline-block"><path d="M1 1L3.5 3.5L6 2L9 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
-  // Get style overrides based on label
-  $: labelStyles = specialLabelStyles[label] || null;
-
-  // Value color logic
-  $: valueColor = labelStyles
-    ? labelStyles.valueColor
-    : trend === 'up'
-    ? 'text-green-600'
-    : trend === 'down'
-    ? 'text-red-600'
-    : 'text-indigo-600';
-
-  // Icon style logic
-  $: iconTextColor = labelStyles ? labelStyles.iconTextColor : 'text-indigo-600';
-  $: iconBgColor = labelStyles ? labelStyles.iconBg : 'bg-indigo-50 group-hover:bg-indigo-100';
+  $: trendColor = trend === 'up' ? 'text-purple-400' : trend === 'down' ? 'text-red-400' : 'text-gray-400';
 </script>
 
-<div class="bg-white p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-100 hover:border-indigo-100 group">
-  <div class="flex justify-between items-start mb-3">
-    <div>
-      <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</p>
+{#if loading}
+  <!-- Loading Skeleton -->
+  <div class="bg-[#161B22] p-5 rounded-xl border border-[#30363d] animate-pulse">
+    <div class="flex justify-between items-start">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-gray-700 rounded-lg"></div>
+        <div class="w-20 h-5 bg-gray-700 rounded"></div>
+      </div>
+      <div class="w-12 h-5 bg-gray-700 rounded"></div>
+    </div>
+    <div class="h-9 w-1/2 bg-gray-700 rounded mt-4"></div>
+  </div>
+{:else}
+  <!-- Actual Card -->
+  <div class="bg-[#161B22] p-5 rounded-xl border border-[#30363d] transition-all hover:border-gray-600">
+    <div class="flex justify-between items-start">
+      <div class="flex items-center gap-3">
+        {#if icon}
+          <div class="bg-gray-800 p-2 rounded-lg text-gray-400">
+            {@html icon}
+          </div>
+        {/if}
+        <p class="text-sm font-medium text-gray-400">{label}</p>
+      </div>
 
-      {#if loading}
-        <div class="h-8 w-3/4 mt-2 bg-gray-200 rounded animate-pulse"></div>
-      {:else}
-        <p class={`text-2xl font-bold mt-1 ${valueColor} transition-colors duration-200`}>
-          {value}
-
-          {#if trend !== 'neutral'}
-            <span class="ml-2 text-sm inline-flex items-center">
-              {#if trend === 'up'}
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd" />
-                </svg>
-              {:else}
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fill-rule="evenodd" d="M12 7a1 1 0 01-1 1H9v1h2a1 1 0 110 2H9v1h2a1 1 0 110 2H9v1a1 1 0 11-2 0v-1H5a1 1 0 110-2h2v-1H5a1 1 0 110-2h2V8H5a1 1 0 010-2h2V5a1 1 0 112 0v1h2a1 1 0 011 1z" clip-rule="evenodd" />
-                </svg>
-              {/if}
-            </span>
+      {#if trend !== 'neutral'}
+        <div class="flex items-center gap-1 text-sm font-semibold {trendColor}">
+          {#if trend === 'up'}
+            {@html trendUpIcon}
+          {:else if trend === 'down'}
+            {@html trendDownIcon}
           {/if}
-        </p>
+          <span>{change}</span>
+        </div>
       {/if}
     </div>
-
-    {#if icon}
-      <div class={`p-2 rounded-lg ${iconBgColor} ${iconTextColor} transition-colors duration-200`}>
-        {@html icon}
-      </div>
-    {/if}
+    <p class="text-3xl font-bold text-white mt-4">{value}</p>
   </div>
-
-  {#if description && !loading}
-    <p class="text-xs text-gray-500 mt-2 truncate">{description}</p>
-  {:else if loading}
-    <div class="h-4 w-full mt-2 bg-gray-200 rounded animate-pulse"></div>
-  {/if}
-</div>
+{/if}
