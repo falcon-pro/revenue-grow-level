@@ -66,6 +66,7 @@ export type Database = {
           api_revenue_pkr: number | null
           api_revenue_usd: number | null
           api_total_impressions: number | null
+          apify_accounts: number | null
           created_at: string | null
           email: string
           id: string
@@ -92,6 +93,7 @@ export type Database = {
           api_revenue_pkr?: number | null
           api_revenue_usd?: number | null
           api_total_impressions?: number | null
+          apify_accounts?: number | null
           created_at?: string | null
           email: string
           id?: string
@@ -118,6 +120,7 @@ export type Database = {
           api_revenue_pkr?: number | null
           api_revenue_usd?: number | null
           api_total_impressions?: number | null
+          apify_accounts?: number | null
           created_at?: string | null
           email?: string
           id?: string

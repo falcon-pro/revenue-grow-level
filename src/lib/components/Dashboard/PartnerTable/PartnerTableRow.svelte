@@ -134,7 +134,9 @@
     { label: "Email", value: partner.email, truncate: true, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />' },
     { label: "Mobile", value: partner.mobile, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 2.25h9a1.5 1.5 0 0 1 1.5 1.5v16.5a1.5 1.5 0 0 1-1.5 1.5h-9a1.5 1.5 0 0 1-1.5-1.5V3.75a1.5 1.5 0 0 1 1.5-1.5zM12 18.75h.008v.008H12v-.008z" />' },
     { label: "Webmoney", value: partner.webmoney,   icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 6h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5v-9A1.5 1.5 0 0 1 4.5 6zM12 9.75v4.5M8.25 9.75h7.5" />'},
-  ];
+   { label: "Apify Accounts", value: partner.apify_accounts != null ? String(partner.apify_accounts) : null, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h12A2.25 2.25 0 0 0 20.25 14.25V5.25A2.25 2.25 0 0 0 18 3H6A2.25 2.25 0 0 0 3.75 3Zm0 0H6M3.75 3v3.75M3.75 14.25v3.75M6 16.5h12M18 16.5v3.75M18 3v3.75m-12-3.75h12M9.75 7.5h4.5M9.75 10.5h4.5M9.75 13.5h4.5Z" />' },
+
+    ];
 
   let adsterraInfo: DataItem[] = [
     { label: "Address", value: partner.address, truncate: true, icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />' },
@@ -191,14 +193,19 @@ const valueDisplay = (val: string | undefined | null): string => val ?? 'N/A';
             {/if}
           </div>
       </div>
+      <div class="flex gap-2 justify-between items-center">
       <p class="text-2xl font-bold text-slate-700">{revenueUSDStr}
         {#if revenuePKRStr}
-          <span class="text-sm font-medium text-slate-500 ml-1">{revenuePKRStr}</span>
+        <span class="text-sm font-medium text-slate-500 ml-1">{revenuePKRStr}</span>
         {/if}
       </p>
+      <span class="{latestStatusClass} !py-0.5 !px-1.5">{latestStatusText}</span>
+      </div>
       <div class="flex justify-between text-xs mt-1">
-        <span class="text-slate-500">Rev. Period: {revenuePeriodStr} / Total Impressions:  {totalApiImpressionsForDisplay}</span>
-        <span class="{latestStatusClass} !py-0.5 !px-1.5">{latestStatusText}</span>
+        <div class="flex flex-col gap-2">
+        <span class="text-slate-500">Rev. Period: {revenuePeriodStr}</span>
+        <span class="text-slate-500">Total Impressions:  {totalApiImpressionsForDisplay}</span>
+        </div>
       </div>
     </div>
     <hr class="border-slate-100">
