@@ -398,7 +398,7 @@
     /* background-color: #f1f5f9;  */
     min-height: 100vh;
     padding: 1rem;
-    padding-top: 0px;
+    padding-top: 0px !important;
     color: #1e293b; /* slate-800 */
   }
   @media (min-width: 640px) { .dashboard-container { padding: 1.25rem; } }
