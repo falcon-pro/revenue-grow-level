@@ -402,7 +402,7 @@
     color: #1e293b; /* slate-800 */
   }
   @media (min-width: 640px) { .dashboard-container { padding: 1.25rem; } }
-  @media (min-width: 1024px) { .dashboard-container { padding: 1.5rem; } }
+  @media (min-width: 1024px) { .dashboard-container { padding: 0rem; } }
 
   .dashboard-content {
     max-width: 80rem; /* max-w-7xl */
