@@ -18,7 +18,7 @@ export const adminMap: Record<string, AdminMeta> = {
   },
   admin_identifier4: {
     name: 'Moshin',
-    initials: 'NA',
+    initials: 'MH',
   },
   // Add more admins as needed
 };
